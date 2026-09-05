@@ -1,0 +1,47 @@
+{
+  "name": "1D Basic Timber Cut",
+  "description": "Standard 1D cutting stock problem with 3mm kerf and minimum remnant length of 200mm",
+  "input": {
+    "dimension": "1D",
+    "kerf": 3.0,
+    "min_remnant_size": {
+      "length": 200.0
+    },
+    "stocks": [
+      {
+        "id": "stock-2m",
+        "length": 2000.0,
+        "quantity": 3
+      },
+      {
+        "id": "stock-3m",
+        "length": 3000.0,
+        "quantity": 1
+      }
+    ],
+    "parts": [
+      {
+        "id": "p-800",
+        "name": "Leg",
+        "length": 800.0,
+        "quantity": 3
+      },
+      {
+        "id": "p-500",
+        "name": "Brace",
+        "length": 500.0,
+        "quantity": 4
+      },
+      {
+        "id": "p-300",
+        "name": "Support",
+        "length": 300.0,
+        "quantity": 2
+      }
+    ]
+  },
+  "expected": {
+    "all_placed": true,
+    "max_stocks_used": 3
+  }
+}

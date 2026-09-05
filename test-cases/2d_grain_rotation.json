@@ -1,0 +1,54 @@
+{
+  "name": "2D Grain and Rotation Constraints",
+  "description": "Verification of rotation permission and grain direction alignment constraints",
+  "input": {
+    "dimension": "2D",
+    "kerf": 2.0,
+    "min_remnant_size": {
+      "width": 100.0,
+      "height": 100.0
+    },
+    "stocks": [
+      {
+        "id": "panel-600x1200",
+        "width": 600.0,
+        "height": 1200.0,
+        "quantity": 1,
+        "grain": "length"
+      }
+    ],
+    "parts": [
+      {
+        "id": "rotatable-wide-part",
+        "name": "Rotatable Wide Part",
+        "width": 700.0,
+        "height": 250.0,
+        "quantity": 1,
+        "can_rotate": true
+      },
+      {
+        "id": "non-rotatable-too-wide",
+        "name": "Non-Rotatable Too Wide Part",
+        "width": 700.0,
+        "height": 250.0,
+        "quantity": 1,
+        "can_rotate": false,
+        "grain": "length"
+      },
+      {
+        "id": "fitting-grain-part",
+        "name": "Fitting Grain Part",
+        "width": 500.0,
+        "height": 300.0,
+        "quantity": 1,
+        "can_rotate": false,
+        "grain": "length"
+      }
+    ]
+  },
+  "expected": {
+    "all_placed": false,
+    "placed_part_ids": ["rotatable-wide-part", "fitting-grain-part"],
+    "unplaced_part_ids": ["non-rotatable-too-wide"]
+  }
+}

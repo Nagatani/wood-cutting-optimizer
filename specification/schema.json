@@ -1,0 +1,267 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/wood-cutting-optimizer/specification/schema.json",
+  "title": "WoodCuttingOptimizationSchema",
+  "description": "Standard input and output schema for 1D/2D wood cutting optimization",
+  "definitions": {
+    "GrainDirection": {
+      "type": "string",
+      "enum": ["none", "length", "width"],
+      "default": "none",
+      "description": "Wood grain direction. 'none': no direction constraint, 'length': grain runs along the length/height axis, 'width': grain runs along width axis."
+    },
+    "MinRemnantSize": {
+      "type": "object",
+      "properties": {
+        "length": { "type": "number", "minimum": 0 },
+        "width": { "type": "number", "minimum": 0 },
+        "height": { "type": "number", "minimum": 0 }
+      },
+      "additionalProperties": false,
+      "description": "Threshold dimension above which leftover wood is classified as reusable remnant instead of scrap/waste."
+    },
+    "Stock1D": {
+      "type": "object",
+      "required": ["id", "length"],
+      "properties": {
+        "id": { "type": "string" },
+        "length": { "type": "number", "exclusiveMinimum": 0 },
+        "quantity": { "type": "integer", "minimum": 1, "default": 1 },
+        "cost": { "type": "number", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "Part1D": {
+      "type": "object",
+      "required": ["id", "length"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "length": { "type": "number", "exclusiveMinimum": 0 },
+        "quantity": { "type": "integer", "minimum": 1, "default": 1 }
+      },
+      "additionalProperties": false
+    },
+    "Stock2D": {
+      "type": "object",
+      "required": ["id", "width", "height"],
+      "properties": {
+        "id": { "type": "string" },
+        "width": { "type": "number", "exclusiveMinimum": 0 },
+        "height": { "type": "number", "exclusiveMinimum": 0 },
+        "quantity": { "type": "integer", "minimum": 1, "default": 1 },
+        "cost": { "type": "number", "minimum": 0 },
+        "grain": { "$ref": "#/definitions/GrainDirection" }
+      },
+      "additionalProperties": false
+    },
+    "Part2D": {
+      "type": "object",
+      "required": ["id", "width", "height"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "width": { "type": "number", "exclusiveMinimum": 0 },
+        "height": { "type": "number", "exclusiveMinimum": 0 },
+        "quantity": { "type": "integer", "minimum": 1, "default": 1 },
+        "can_rotate": { "type": "boolean", "default": true },
+        "grain": { "$ref": "#/definitions/GrainDirection" }
+      },
+      "additionalProperties": false
+    },
+    "InputRequest": {
+      "type": "object",
+      "required": ["dimension", "stocks", "parts"],
+      "properties": {
+        "dimension": {
+          "type": "string",
+          "enum": ["1D", "2D"]
+        },
+        "kerf": {
+          "type": "number",
+          "minimum": 0,
+          "default": 0,
+          "description": "Saw blade thickness in mm"
+        },
+        "min_remnant_size": {
+          "$ref": "#/definitions/MinRemnantSize"
+        },
+        "stocks": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "anyOf": [
+              { "$ref": "#/definitions/Stock1D" },
+              { "$ref": "#/definitions/Stock2D" }
+            ]
+          }
+        },
+        "parts": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "anyOf": [
+              { "$ref": "#/definitions/Part1D" },
+              { "$ref": "#/definitions/Part2D" }
+            ]
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "Cut1D": {
+      "type": "object",
+      "required": ["x", "kerf", "step"],
+      "properties": {
+        "x": { "type": "number" },
+        "kerf": { "type": "number" },
+        "step": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": false
+    },
+    "Placement1D": {
+      "type": "object",
+      "required": ["part_id", "x", "length"],
+      "properties": {
+        "part_id": { "type": "string" },
+        "x": { "type": "number" },
+        "length": { "type": "number" }
+      },
+      "additionalProperties": false
+    },
+    "Segment1D": {
+      "type": "object",
+      "required": ["x", "length"],
+      "properties": {
+        "x": { "type": "number" },
+        "length": { "type": "number" }
+      },
+      "additionalProperties": false
+    },
+    "Cut2D": {
+      "type": "object",
+      "required": ["type", "x", "y", "length", "kerf", "step"],
+      "properties": {
+        "type": { "type": "string", "enum": ["horizontal", "vertical"] },
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "length": { "type": "number" },
+        "kerf": { "type": "number" },
+        "step": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": false
+    },
+    "Placement2D": {
+      "type": "object",
+      "required": ["part_id", "x", "y", "width", "height", "rotated"],
+      "properties": {
+        "part_id": { "type": "string" },
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "width": { "type": "number" },
+        "height": { "type": "number" },
+        "rotated": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "Rect2D": {
+      "type": "object",
+      "required": ["x", "y", "width", "height"],
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "width": { "type": "number" },
+        "height": { "type": "number" }
+      },
+      "additionalProperties": false
+    },
+    "StockResult1D": {
+      "type": "object",
+      "required": ["stock_id", "index", "length", "placements", "cuts", "remnants", "waste"],
+      "properties": {
+        "stock_id": { "type": "string" },
+        "index": { "type": "integer" },
+        "length": { "type": "number" },
+        "placements": { "type": "array", "items": { "$ref": "#/definitions/Placement1D" } },
+        "cuts": { "type": "array", "items": { "$ref": "#/definitions/Cut1D" } },
+        "remnants": { "type": "array", "items": { "$ref": "#/definitions/Segment1D" } },
+        "waste": { "type": "array", "items": { "$ref": "#/definitions/Segment1D" } }
+      },
+      "additionalProperties": false
+    },
+    "StockResult2D": {
+      "type": "object",
+      "required": ["stock_id", "index", "width", "height", "placements", "cuts", "remnants", "waste"],
+      "properties": {
+        "stock_id": { "type": "string" },
+        "index": { "type": "integer" },
+        "width": { "type": "number" },
+        "height": { "type": "number" },
+        "placements": { "type": "array", "items": { "$ref": "#/definitions/Placement2D" } },
+        "cuts": { "type": "array", "items": { "$ref": "#/definitions/Cut2D" } },
+        "remnants": { "type": "array", "items": { "$ref": "#/definitions/Rect2D" } },
+        "waste": { "type": "array", "items": { "$ref": "#/definitions/Rect2D" } }
+      },
+      "additionalProperties": false
+    },
+    "Summary": {
+      "type": "object",
+      "required": [
+        "stock_count_used",
+        "parts_placed",
+        "parts_total",
+        "total_stock_measure",
+        "total_used_measure",
+        "total_waste_measure",
+        "total_remnant_measure",
+        "yield_rate"
+      ],
+      "properties": {
+        "stock_count_used": { "type": "integer" },
+        "parts_placed": { "type": "integer" },
+        "parts_total": { "type": "integer" },
+        "total_stock_measure": { "type": "number" },
+        "total_used_measure": { "type": "number" },
+        "total_waste_measure": { "type": "number" },
+        "total_remnant_measure": { "type": "number" },
+        "yield_rate": { "type": "number", "minimum": 0, "maximum": 1 }
+      },
+      "additionalProperties": false
+    },
+    "UnplacedPart": {
+      "type": "object",
+      "required": ["part_id", "quantity"],
+      "properties": {
+        "part_id": { "type": "string" },
+        "quantity": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": false
+    },
+    "OptimizationResult": {
+      "type": "object",
+      "required": ["dimension", "summary", "stocks", "unplaced_parts"],
+      "properties": {
+        "dimension": { "type": "string", "enum": ["1D", "2D"] },
+        "summary": { "$ref": "#/definitions/Summary" },
+        "stocks": {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              { "$ref": "#/definitions/StockResult1D" },
+              { "$ref": "#/definitions/StockResult2D" }
+            ]
+          }
+        },
+        "unplaced_parts": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/UnplacedPart" }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "oneOf": [
+    { "$ref": "#/definitions/InputRequest" },
+    { "$ref": "#/definitions/OptimizationResult" }
+  ]
+}

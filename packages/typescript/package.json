@@ -1,0 +1,29 @@
+{
+  "name": "@wood-opt/core",
+  "version": "0.1.0",
+  "description": "Zero-dependency 1D and 2D wood cutting optimization core library",
+  "author": "wood-cutting-optimizer contributors",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js",
+      "default": "./dist/src/index.js"
+    }
+  },
+  "bin": {
+    "wood-opt": "./dist/bin/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "node --test dist/tests/*.test.js",
+    "cli": "node dist/bin/cli.js"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0"
+  }
+}

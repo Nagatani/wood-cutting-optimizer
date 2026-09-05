@@ -1,0 +1,51 @@
+{
+  "name": "2D Guillotine Plywood Cut",
+  "description": "2D guillotine cutting of 910x1820 plywood sheet for bookshelf components with 3mm kerf",
+  "input": {
+    "dimension": "2D",
+    "kerf": 3.0,
+    "min_remnant_size": {
+      "width": 150.0,
+      "height": 150.0
+    },
+    "stocks": [
+      {
+        "id": "plywood-3x6",
+        "width": 910.0,
+        "height": 1820.0,
+        "quantity": 1,
+        "grain": "length"
+      }
+    ],
+    "parts": [
+      {
+        "id": "side-panels",
+        "name": "Side Panels",
+        "width": 900.0,
+        "height": 300.0,
+        "quantity": 2,
+        "can_rotate": true
+      },
+      {
+        "id": "top-bottom",
+        "name": "Top and Bottom Panels",
+        "width": 500.0,
+        "height": 300.0,
+        "quantity": 2,
+        "can_rotate": true
+      },
+      {
+        "id": "shelves",
+        "name": "Shelves",
+        "width": 500.0,
+        "height": 300.0,
+        "quantity": 3,
+        "can_rotate": true
+      }
+    ]
+  },
+  "expected": {
+    "all_placed": true,
+    "max_stocks_used": 1
+  }
+}

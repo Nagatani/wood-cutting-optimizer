@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wood-opt"
+version = "0.1.0"
+description = "Zero-dependency 1D and 2D wood cutting optimization core library"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [
+    { name = "wood-cutting-optimizer contributors" }
+]
+requires-python = ">=3.9"
+keywords = ["woodworking", "cutting-stock", "bin-packing", "guillotine-cut", "optimizer"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Manufacturing",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Mathematics",
+]
+dependencies = []
+
+[project.scripts]
+wood-opt = "wood_opt.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["wood_opt*"]
