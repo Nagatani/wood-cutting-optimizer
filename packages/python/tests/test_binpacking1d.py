@@ -1,5 +1,5 @@
 import unittest
-from wood_opt.binpacking import (
+from wood_cutting_optimizer.binpacking import (
     bin_pack_1d,
     BinDefinition,
     ItemDefinition,

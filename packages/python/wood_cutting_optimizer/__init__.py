@@ -1,5 +1,5 @@
 """
-wood-opt: Zero-dependency 1D and 2D wood cutting optimization core library
+wood-cutting-optimizer: Zero-dependency 1D and 2D wood cutting optimization core library
 """
 
 from typing import Dict, Any, Union

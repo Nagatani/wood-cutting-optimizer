@@ -44,7 +44,7 @@ wood-cutting-optimizer/
     │   ├── bin/cli.ts      # CLI ツール
     │   └── tests/          # test-cases を用いた node:test 自動検証
     └── python/             # Zero-dependency Python コア
-        ├── wood_opt/       # 1D/2D 最適化アルゴリズム & CLI
+        ├── wood_cutting_optimizer/ # 1D/2D 最適化アルゴリズム & CLI
         └── tests/          # test-cases を用いた unittest 自動検証
 ```
 
@@ -73,7 +73,7 @@ node dist/bin/cli.js -i input.json -o result.json
 ### 3. コードからの利用 (TypeScript / JavaScript)
 
 ```typescript
-import { optimize, InputRequest } from '@wood-opt/core';
+import { optimize, InputRequest } from 'wood-cutting-optimizer';
 
 const request: InputRequest = {
   dimension: '2D',
@@ -111,16 +111,16 @@ pip install -e .
 
 ```bash
 # モジュールから直接実行
-python -m wood_opt ../../test-cases/2d_guillotine.json
+python -m wood_cutting_optimizer ../../test-cases/2d_guillotine.json
 
-# またはインストール後のコマンド
-wood-opt -i input.json -o result.json
+# またはインストール後のコマンド (wood-opt でも実行可能)
+wood-cutting-optimizer -i input.json -o result.json
 ```
 
 ### 3. コードからの利用 (Python)
 
 ```python
-from wood_opt import optimize
+from wood_cutting_optimizer import optimize
 
 data = {
     "dimension": "2D",
@@ -159,7 +159,7 @@ print(f"ギロチンカット数: {len(result.stocks[0].cuts)} 回")
 ### TypeScript での利用例
 
 ```typescript
-import { binPack1D, BinDefinition, ItemDefinition } from '@wood-opt/core';
+import { binPack1D, BinDefinition, ItemDefinition } from 'wood-cutting-optimizer';
 
 const bins: BinDefinition[] = [
   { id: 'server-1', capacity: 100, quantity: 2 },
@@ -184,7 +184,7 @@ console.log(`平均充填率: ${(result.summary.averageUtilization * 100).toFixe
 ### Python での利用例
 
 ```python
-from wood_opt.binpacking import bin_pack_1d, BinDefinition, ItemDefinition
+from wood_cutting_optimizer.binpacking import bin_pack_1d, BinDefinition, ItemDefinition
 
 bins = [
     BinDefinition(id="container-1", capacity=100.0, quantity=2),

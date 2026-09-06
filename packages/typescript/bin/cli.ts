@@ -10,8 +10,8 @@ function printHelp(): void {
 Wood Cutting Optimizer CLI (TypeScript)
 
 Usage:
-  wood-opt --input <path-to-json> [--output <path-to-json>]
-  wood-opt <path-to-json>
+  wood-cutting-optimizer --input <path-to-json> [--output <path-to-json>]
+  wood-cutting-optimizer <path-to-json>
 
 Options:
   -i, --input <file>    Path to input JSON file

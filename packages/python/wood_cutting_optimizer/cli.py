@@ -7,7 +7,7 @@ from . import optimize
 
 def main():
     parser = argparse.ArgumentParser(
-        prog="wood-opt",
+        prog="wood-cutting-optimizer",
         description="Wood Cutting Optimizer CLI (Python)",
     )
     parser.add_argument(

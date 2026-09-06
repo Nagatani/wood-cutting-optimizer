@@ -1,5 +1,5 @@
 {
-  "name": "@wood-opt/core",
+  "name": "wood-cutting-optimizer",
   "version": "0.1.0",
   "description": "Zero-dependency 1D and 2D wood cutting optimization core library",
   "author": "wood-cutting-optimizer contributors",
@@ -15,6 +15,7 @@
     }
   },
   "bin": {
+    "wood-cutting-optimizer": "./dist/bin/cli.js",
     "wood-opt": "./dist/bin/cli.js"
   },
   "scripts": {

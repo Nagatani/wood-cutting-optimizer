@@ -1,7 +1,7 @@
 import json
 import unittest
 from pathlib import Path
-from wood_opt import optimize
+from wood_cutting_optimizer import optimize
 
 
 class TestCasesCommon(unittest.TestCase):

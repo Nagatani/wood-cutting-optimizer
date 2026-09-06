@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "wood-opt"
+name = "wood-cutting-optimizer"
 version = "0.1.0"
 description = "Zero-dependency 1D and 2D wood cutting optimization core library"
 readme = "README.md"
@@ -28,8 +28,9 @@ classifiers = [
 dependencies = []
 
 [project.scripts]
-wood-opt = "wood_opt.cli:main"
+wood-cutting-optimizer = "wood_cutting_optimizer.cli:main"
+wood-opt = "wood_cutting_optimizer.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["wood_opt*"]
+include = ["wood_cutting_optimizer*"]
