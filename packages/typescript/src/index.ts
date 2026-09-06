@@ -1,4 +1,5 @@
 export * from './types.js';
+export * from './binpacking/index.js';
 export { optimize1D } from './optimizer1d.js';
 export { optimize2D } from './optimizer2d.js';
 

@@ -144,6 +144,69 @@ print(f"ギロチンカット数: {len(result.stocks[0].cuts)} 回")
 
 ---
 
+## 汎用 1次元ビンパッキング (Generic 1D Bin Packing)
+
+木材カット固有の制約（鋸刃厚 kerf、端材分類、切断順序など）を必要としない、**汎用的な 1D ビンパッキング計算ロジック**も独立したインターフェイスとして提供しています。
+
+ディスク容量配分、荷物梱包、タスク割り当て、予算配分など、任意の一次元容量詰め込み問題にそのままご利用いただけます。
+
+### 主な特徴
+- **木材制約フリー**: 刃厚・切断ステップ・端材分類なしでシンプルに利用可能
+- **アイテム間隔 (Spacing)**: 必要に応じてアイテム間の最小間隙（パディングやマージン）をオプション指定可能
+- **複数戦略の選択**: `best-fit-decreasing` (デフォルト), `first-fit-decreasing`, `worst-fit-decreasing`
+- **メタデータの透過保持**: Bin および Item に呼び出し元の独自オブジェクト（ジェネリクス `data`）を付与可能
+
+### TypeScript での利用例
+
+```typescript
+import { binPack1D, BinDefinition, ItemDefinition } from '@wood-opt/core';
+
+const bins: BinDefinition[] = [
+  { id: 'server-1', capacity: 100, quantity: 2 },
+  { id: 'server-2', capacity: 150, quantity: 1 }
+];
+
+const items: ItemDefinition[] = [
+  { id: 'job-A', size: 60 },
+  { id: 'job-B', size: 40 },
+  { id: 'job-C', size: 70 },
+  { id: 'job-D', size: 30 }
+];
+
+const result = binPack1D(bins, items, {
+  strategy: 'best-fit-decreasing'
+});
+
+console.log(`使用ビン数: ${result.summary.binsUsed}`);
+console.log(`平均充填率: ${(result.summary.averageUtilization * 100).toFixed(1)}%`);
+```
+
+### Python での利用例
+
+```python
+from wood_opt.binpacking import bin_pack_1d, BinDefinition, ItemDefinition
+
+bins = [
+    BinDefinition(id="container-1", capacity=100.0, quantity=2),
+    BinDefinition(id="container-2", capacity=150.0, quantity=1),
+]
+
+items = [
+    ItemDefinition(id="pkg-1", size=60.0),
+    ItemDefinition(id="pkg-2", size=40.0),
+    ItemDefinition(id="pkg-3", size=70.0),
+    ItemDefinition(id="pkg-4", size=30.0),
+]
+
+result = bin_pack_1d(bins, items)
+
+print(f"使用ビン数: {result.summary.bins_used}")
+print(f"平均充填率: {result.summary.average_utilization * 100:.1f}%")
+```
+
+
+---
+
 ## テスト実行 (言語共通シナリオ)
 
 両言語ともに `test-cases/*.json` を入力として同一の検証シナリオを実行します。
@@ -186,8 +249,10 @@ python -m unittest discover -s tests
 
 - [x] Zero-dependency TypeScript 実装 (1D / 2D Guillotine)
 - [x] Zero-dependency Python 実装 (1D / 2D Guillotine)
+- [x] 汎用 1D ビンパッキング計算ロジック＆インターフェイス (TypeScript / Python)
 - [x] 言語共通 JSON Schema & テストケース駆動検証
 - [ ] SVG カット図面出力レンダラー（プレビュー機能）
+
 - [ ] Rust コアエンジンへの移植 & WebAssembly (wasm-bindgen) / PyO3 バインディング
 - [ ] コスト最適化（複数サイズのストックが存在する場合の最小コスト探索）
 

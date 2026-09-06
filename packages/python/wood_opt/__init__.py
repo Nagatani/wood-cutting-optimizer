@@ -13,9 +13,36 @@ from .types import (
 )
 from .optimizer1d import optimize_1d
 from .optimizer2d import optimize_2d
+from .binpacking import (
+    BinDefinition,
+    ItemDefinition,
+    BinPacking1DOptions,
+    BinPacking1DResult,
+    PackedBin,
+    PackedItem,
+    UnpackedItem,
+    BinPacking1DSummary,
+    PackingStrategy1D,
+    bin_pack_1d,
+)
 
 __version__ = "0.1.0"
-__all__ = ["optimize", "optimize_1d", "optimize_2d"]
+__all__ = [
+    "optimize",
+    "optimize_1d",
+    "optimize_2d",
+    "bin_pack_1d",
+    "BinDefinition",
+    "ItemDefinition",
+    "BinPacking1DOptions",
+    "BinPacking1DResult",
+    "PackedBin",
+    "PackedItem",
+    "UnpackedItem",
+    "BinPacking1DSummary",
+    "PackingStrategy1D",
+]
+
 
 
 def optimize(data: Dict[str, Any]) -> OptimizationResult:
