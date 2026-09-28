@@ -21,6 +21,7 @@ from .binpacking import (
 )
 from .validate import validate_1d, resolve_stock_quantity
 from .evaluation import SolutionEvaluation, is_better_evaluation
+from .usage import compute_stock_usage
 
 EPS = 1e-9
 
@@ -171,6 +172,7 @@ def _build_result(
             total_waste_measure=round(total_waste_measure, 4),
             total_remnant_measure=round(total_remnant_measure, 4),
             yield_rate=round(yield_rate, 4),
+            stock_usage=compute_stock_usage(stocks, [u["stock_index"] for u in used_stocks]),
         ),
         stocks=result_stocks,
         unplaced_parts=unplaced_parts,

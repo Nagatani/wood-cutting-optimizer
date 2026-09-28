@@ -28,6 +28,32 @@ describe('Invariants across all shared test cases', () => {
   }
 });
 
+describe('Stock usage (purchase list)', () => {
+  for (const file of caseFiles) {
+    it(`stock_usage quantities add up to stock_count_used (${file})`, () => {
+      const caseData = JSON.parse(fs.readFileSync(path.join(testCasesDir, file), 'utf-8'));
+      const { summary } = optimize(caseData.input);
+      const total = summary.stock_usage.reduce((sum, u) => sum + u.quantity, 0);
+      assert.strictEqual(total, summary.stock_count_used);
+    });
+  }
+
+  it('should report cost per stock entry, or null without cost', () => {
+    const result = optimize({
+      dimension: '1D',
+      stocks: [
+        { id: 'priced', length: 1000, quantity: 2, cost: 250 },
+        { id: 'free', length: 1000, quantity: 2 },
+      ],
+      parts: [{ id: 'a', length: 900, quantity: 4 }],
+    });
+    assert.deepStrictEqual(result.summary.stock_usage, [
+      { stock_id: 'priced', quantity: 2, cost: 500 },
+      { stock_id: 'free', quantity: 2, cost: null },
+    ]);
+  });
+});
+
 describe('1D cutting', () => {
   it('should add a final cut and subtract kerf before the leftover', () => {
     const result = optimize({

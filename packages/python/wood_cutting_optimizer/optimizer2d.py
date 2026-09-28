@@ -15,6 +15,7 @@ from .types import (
 )
 from .validate import validate_2d, resolve_stock_quantity
 from .evaluation import SolutionEvaluation, is_better_evaluation
+from .usage import compute_stock_usage
 
 # Tolerance for floating-point comparisons (e.g. 0.1 + 0.2 fitting into 0.3).
 EPS = 1e-9
@@ -54,8 +55,18 @@ class FreeRect:
 
 
 class ActiveStock2D:
-    def __init__(self, stock_id: str, index: int, width: float, height: float, grain: GrainDirection, cost: float):
+    def __init__(
+        self,
+        stock_id: str,
+        stock_index: int,
+        index: int,
+        width: float,
+        height: float,
+        grain: GrainDirection,
+        cost: float,
+    ):
         self.stock_id = stock_id
+        self.stock_index = stock_index  # Index into the input stocks
         self.index = index
         self.width = width
         self.height = height
@@ -375,6 +386,7 @@ def _run_heuristic(
 
         new_stock = ActiveStock2D(
             stock_id=chosen["id"],
+            stock_index=chosen_pool_idx,
             index=global_stock_index,
             width=chosen["width"],
             height=chosen["height"],
@@ -415,6 +427,7 @@ def _is_remnant_rect(
 
 
 def _build_result(
+    stocks: List[Stock2D],
     active_stocks: List[ActiveStock2D],
     unplaced_parts_map: Dict[str, int],
     total_parts_count: int,
@@ -491,6 +504,7 @@ def _build_result(
             total_waste_measure=round(total_waste_measure, 4),
             total_remnant_measure=round(total_remnant_measure, 4),
             yield_rate=round(yield_rate, 4),
+            stock_usage=compute_stock_usage(stocks, [s.stock_index for s in active_stocks]),
         ),
         stocks=result_stocks,
         unplaced_parts=unplaced_parts,
@@ -544,6 +558,7 @@ def optimize_2d(
     for heuristic in heuristics:
         active_stocks, unplaced_parts_map = _run_heuristic(stocks, expanded_parts, kerf, heuristic)
         candidate = _build_result(
+            stocks,
             active_stocks,
             unplaced_parts_map,
             len(expanded_parts),

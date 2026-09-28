@@ -19,6 +19,7 @@ import {
 } from './binpacking/index.js';
 import { validateInput, resolveStockQuantity } from './validate.js';
 import { isBetterEvaluation, SolutionEvaluation } from './evaluation.js';
+import { computeStockUsage } from './usage.js';
 
 const EPS = 1e-9;
 
@@ -231,6 +232,10 @@ function buildResult(
       total_waste_measure: Number(totalWasteMeasure.toFixed(4)),
       total_remnant_measure: Number(totalRemnantMeasure.toFixed(4)),
       yield_rate: Number(yieldRate.toFixed(4)),
+      stock_usage: computeStockUsage(
+        stocks,
+        usedStocks.map((u) => u.stockIndex)
+      ),
     },
     stocks: resultStocks,
     unplaced_parts,

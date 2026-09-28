@@ -120,6 +120,12 @@ export interface StockResult2D {
   waste: Rect2D[];
 }
 
+export interface StockUsage {
+  stock_id: string;
+  quantity: number;
+  cost: number | null; // Unit cost x quantity, or null when the stock has no cost
+}
+
 export interface Summary {
   stock_count_used: number;
   parts_placed: number;
@@ -129,6 +135,7 @@ export interface Summary {
   total_waste_measure: number;
   total_remnant_measure: number;
   yield_rate: number;
+  stock_usage: StockUsage[];
 }
 
 export interface UnplacedPart {

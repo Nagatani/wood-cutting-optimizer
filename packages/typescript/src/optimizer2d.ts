@@ -12,6 +12,7 @@ import {
 } from './types.js';
 import { validateInput, resolveStockQuantity } from './validate.js';
 import { isBetterEvaluation, SolutionEvaluation } from './evaluation.js';
+import { computeStockUsage } from './usage.js';
 
 /** Tolerance for floating-point comparisons (e.g. 0.1 + 0.2 fitting into 0.3). */
 const EPS = 1e-9;
@@ -88,6 +89,7 @@ interface StockPoolItem {
 
 interface ActiveStock2D {
   stockId: string;
+  stockIndex: number; // Index into input.stocks
   index: number;
   width: number;
   height: number;
@@ -192,6 +194,7 @@ export function optimize2D(input: InputRequest): OptimizationResult {
   for (const heuristic of heuristics) {
     const activeStocksAndUnplaced = runHeuristic(input.stocks as Stock2D[], expandedParts, kerf, heuristic);
     const candidate = buildResult(
+      input.stocks as Stock2D[],
       activeStocksAndUnplaced.activeStocks,
       activeStocksAndUnplaced.unplacedPartsMap,
       expandedParts.length,
@@ -275,6 +278,7 @@ function runHeuristic(
 
     const newStock: ActiveStock2D = {
       stockId: chosen.id,
+      stockIndex: chosenPoolIdx,
       index: globalStockIndex++,
       width: chosen.width,
       height: chosen.height,
@@ -363,6 +367,7 @@ function chooseStock(stockPool: StockPoolItem[], part: ExpandedPart2D, rule: Sto
  * Builds the output result and its evaluation from a finished packing pass.
  */
 function buildResult(
+  stocks: Stock2D[],
   activeStocks: ActiveStock2D[],
   unplacedPartsMap: Map<string, number>,
   totalPartsCount: number,
@@ -454,6 +459,10 @@ function buildResult(
       total_waste_measure: Number(totalWasteMeasure.toFixed(4)),
       total_remnant_measure: Number(totalRemnantMeasure.toFixed(4)),
       yield_rate: Number(yieldRate.toFixed(4)),
+      stock_usage: computeStockUsage(
+        stocks,
+        activeStocks.map((s) => s.stockIndex)
+      ),
     },
     stocks: resultStocks,
     unplaced_parts,

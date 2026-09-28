@@ -213,6 +213,19 @@
       },
       "additionalProperties": false
     },
+    "StockUsage": {
+      "type": "object",
+      "required": ["stock_id", "quantity", "cost"],
+      "properties": {
+        "stock_id": { "type": "string" },
+        "quantity": { "type": "integer", "minimum": 1 },
+        "cost": {
+          "type": ["number", "null"],
+          "description": "Unit cost times quantity, or null when the stock has no cost"
+        }
+      },
+      "additionalProperties": false
+    },
     "Summary": {
       "type": "object",
       "required": [
@@ -223,7 +236,8 @@
         "total_used_measure",
         "total_waste_measure",
         "total_remnant_measure",
-        "yield_rate"
+        "yield_rate",
+        "stock_usage"
       ],
       "properties": {
         "stock_count_used": { "type": "integer" },
@@ -233,7 +247,12 @@
         "total_used_measure": { "type": "number" },
         "total_waste_measure": { "type": "number" },
         "total_remnant_measure": { "type": "number" },
-        "yield_rate": { "type": "number", "minimum": 0, "maximum": 1 }
+        "yield_rate": { "type": "number", "minimum": 0, "maximum": 1 },
+        "stock_usage": {
+          "type": "array",
+          "description": "Number of stocks used per input stock entry, in input order (a purchase list)",
+          "items": { "$ref": "#/definitions/StockUsage" }
+        }
       },
       "additionalProperties": false
     },

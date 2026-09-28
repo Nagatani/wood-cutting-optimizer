@@ -124,6 +124,13 @@ class StockResult2D:
 
 
 @dataclass
+class StockUsage:
+    stock_id: str
+    quantity: int
+    cost: Optional[float]  # Unit cost x quantity, or None when the stock has no cost
+
+
+@dataclass
 class Summary:
     stock_count_used: int
     parts_placed: int
@@ -133,6 +140,7 @@ class Summary:
     total_waste_measure: float
     total_remnant_measure: float
     yield_rate: float
+    stock_usage: List[StockUsage] = field(default_factory=list)
 
 
 @dataclass

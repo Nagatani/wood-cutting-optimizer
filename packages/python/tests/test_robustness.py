@@ -9,7 +9,7 @@ from wood_cutting_optimizer.binpacking import (
     ItemDefinition,
     BinPacking1DOptions,
 )
-from wood_cutting_optimizer.types import Cut1D, Segment1D, Rect2D
+from wood_cutting_optimizer.types import Cut1D, Segment1D, Rect2D, StockUsage
 
 TEST_CASES_DIR = Path(__file__).resolve().parent.parent.parent.parent / "test-cases"
 if not TEST_CASES_DIR.exists():
@@ -27,6 +27,30 @@ class TestInvariants(unittest.TestCase):
                 s = optimize(case_data["input"]).summary
                 total = s.total_used_measure + s.total_waste_measure + s.total_remnant_measure
                 self.assertAlmostEqual(total, s.total_stock_measure, delta=1e-3)
+
+
+class TestStockUsage(unittest.TestCase):
+    def test_usage_adds_up_across_shared_cases(self):
+        for case_file in sorted(TEST_CASES_DIR.glob("*.json")):
+            with self.subTest(case=case_file.name):
+                with open(case_file, "r", encoding="utf-8") as f:
+                    case_data = json.load(f)
+                s = optimize(case_data["input"]).summary
+                self.assertEqual(sum(u.quantity for u in s.stock_usage), s.stock_count_used)
+
+    def test_cost_per_stock_entry(self):
+        result = optimize({
+            "dimension": "1D",
+            "stocks": [
+                {"id": "priced", "length": 1000, "quantity": 2, "cost": 250},
+                {"id": "free", "length": 1000, "quantity": 2},
+            ],
+            "parts": [{"id": "a", "length": 900, "quantity": 4}],
+        })
+        self.assertEqual(result.summary.stock_usage, [
+            StockUsage(stock_id="priced", quantity=2, cost=500.0),
+            StockUsage(stock_id="free", quantity=2, cost=None),
+        ])
 
 
 class TestCutting1D(unittest.TestCase):

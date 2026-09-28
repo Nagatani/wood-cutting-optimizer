@@ -277,6 +277,7 @@ GitHub Actions（`.github/workflows/ci.yml`）で、上記すべてを push / Pu
   - `total_used_measure`: 部材が占める純面積/純長さ
   - `total_remnant_measure`: 再利用可能な端材の合計
   - `total_waste_measure`: 刃厚による切損および規定サイズ未満の廃棄余白
+  - `stock_usage`: 原材の種類ごとの使用数（購入リスト）。`[{ "stock_id", "quantity", "cost" }]`。`cost` は単価×数量（`cost` 未指定の原材は `null`）
 - `stocks`:
   - `placements`: 各部材の座標 `(x, y)`、配置寸法 `(width, height)`、回転有無 `rotated`
   - `cuts`: ギロチンカット情報 `(type: "horizontal" | "vertical", x, y, length, kerf, step)`
