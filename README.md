@@ -33,20 +33,25 @@ TypeScript 実装と Python 実装を同等の最適化アルゴリズム・同�
 wood-cutting-optimizer/
 ├── LICENSE                 # MIT License
 ├── README.md               # 本ドキュメント
+├── AGENTS.md               # AI コーディングエージェント向けガイド
+├── .github/workflows/
+│   └── ci.yml              # CI（TS / Python テスト、言語間パリティ検証）
+├── docs/
+│   └── example-*.svg       # README 掲載のカット図面サンプル
+├── scripts/
+│   └── check_parity.py     # TS と Python の出力（JSON・SVG）一致検証
 ├── specification/
 │   └── schema.json         # 入出力標準 JSON Schema
-├── test-cases/             # 言語共通の検証シナリオ (1D, 2D, 木目制約)
-│   ├── 1d_basic.json
-│   ├── 2d_guillotine.json
-│   └── 2d_grain_rotation.json
+├── test-cases/             # 言語共通の検証シナリオ（1D / 2D、木目、コスト、数量無制限、trim など）
+│   └── *.json
 └── packages/
     ├── typescript/         # Zero-dependency TypeScript コア
-    │   ├── src/            # 1D/2D 最適化アルゴリズム
+    │   ├── src/            # 1D/2D 最適化、入力検証、SVG レンダラー、汎用ビンパッキング
     │   ├── bin/cli.ts      # CLI ツール
-    │   └── tests/          # test-cases を用いた node:test 自動検証
+    │   └── tests/          # node:test による自動検証
     └── python/             # Zero-dependency Python コア
-        ├── wood_cutting_optimizer/ # 1D/2D 最適化アルゴリズム & CLI
-        └── tests/          # test-cases を用いた unittest 自動検証
+        ├── wood_cutting_optimizer/ # 1D/2D 最適化、入力検証、SVG レンダラー、CLI
+        └── tests/          # unittest による自動検証
 ```
 
 ---
