@@ -69,6 +69,9 @@ node dist/bin/cli.js --input ../../test-cases/2d_guillotine.json
 
 # 出力ファイル名を指定
 node dist/bin/cli.js -i input.json -o result.json
+
+# SVG カット図面も出力
+node dist/bin/cli.js -i input.json -o result.json --svg cut-plan.svg
 ```
 
 ### 3. コードからの利用 (TypeScript / JavaScript)
@@ -114,6 +117,9 @@ pip install -e .
 # モジュールから直接実行
 python -m wood_cutting_optimizer ../../test-cases/2d_guillotine.json
 
+# SVG カット図面も出力
+python -m wood_cutting_optimizer ../../test-cases/2d_guillotine.json --svg cut-plan.svg
+
 # またはインストール後のコマンド (wood-opt でも実行可能)
 wood-cutting-optimizer -i input.json -o result.json
 ```
@@ -141,6 +147,30 @@ result = optimize(data)
 print(f"歩留まり: {result.summary.yield_rate * 100:.1f}%")
 print(f"使用板数: {result.summary.stock_count_used} 枚")
 print(f"ギロチンカット数: {len(result.stocks[0].cuts)} 回")
+```
+
+---
+
+## SVG カット図面
+
+最適化結果を、原材ごとのカット図面（SVG）として出力できます。部材（名前・寸法、回転した部材は ↻）、再利用可能な端材（緑の破線）、廃材・刃厚ぶん（灰色の背景）、カット線（赤）を描き、カット線にマウスを乗せると切断順（step）が表示されます。
+
+![2D カット図面の例](docs/example-2d.svg)
+
+![1D カット図面の例](docs/example-1d.svg)
+
+```typescript
+import { optimize, renderSvg } from 'wood-cutting-optimizer';
+
+const result = optimize(request);
+const svg = renderSvg(result, request); // 第2引数に入力を渡すと部材名でラベル付け
+```
+
+```python
+from wood_cutting_optimizer import optimize, render_svg
+
+result = optimize(data)
+svg = render_svg(result, data)
 ```
 
 ---
@@ -274,7 +304,7 @@ GitHub Actions（`.github/workflows/ci.yml`）で、上記すべてを push / Pu
 - [x] Zero-dependency Python 実装 (1D / 2D Guillotine)
 - [x] 汎用 1D ビンパッキング計算ロジック＆インターフェイス (TypeScript / Python)
 - [x] 言語共通 JSON Schema & テストケース駆動検証
-- [ ] SVG カット図面出力レンダラー（プレビュー機能）
+- [x] SVG カット図面出力レンダラー（プレビュー機能）
 
 - [ ] Rust コアエンジンへの移植 & WebAssembly (wasm-bindgen) / PyO3 バインディング
 - [x] コスト最適化（複数サイズのストックが存在する場合の最小コスト探索）

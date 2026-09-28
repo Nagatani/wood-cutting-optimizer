@@ -2,7 +2,7 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { optimize } from '../src/index.js';
+import { optimize, renderSvg } from '../src/index.js';
 
 function printHelp(): void {
   console.log(`
@@ -15,12 +15,20 @@ Usage:
 Options:
   -i, --input <file>    Path to input JSON file
   -o, --output <file>   Path to output JSON file (defaults to stdout)
+      --svg <file>      Also write an SVG cutting diagram to this file
   -h, --help            Show this help message
 `);
 }
 
-function parseArgs(args: string[]): { inputPath?: string; outputPath?: string; help?: boolean } {
-  const result: { inputPath?: string; outputPath?: string; help?: boolean } = {};
+interface CliArgs {
+  inputPath?: string;
+  outputPath?: string;
+  svgPath?: string;
+  help?: boolean;
+}
+
+function parseArgs(args: string[]): CliArgs {
+  const result: CliArgs = {};
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -30,6 +38,8 @@ function parseArgs(args: string[]): { inputPath?: string; outputPath?: string; h
       result.inputPath = args[++i];
     } else if (arg === '-o' || arg === '--output') {
       result.outputPath = args[++i];
+    } else if (arg === '--svg') {
+      result.svgPath = args[++i];
     } else if (!arg.startsWith('-') && !result.inputPath) {
       result.inputPath = arg;
     }
@@ -60,6 +70,12 @@ function main(): void {
     // optimize() accepts both direct input and test case structure ({ input: ... })
     const result = optimize(inputJson);
     const jsonOutput = JSON.stringify(result, null, 2);
+
+    if (parsed.svgPath) {
+      const resolvedSvgPath = path.resolve(process.cwd(), parsed.svgPath);
+      fs.writeFileSync(resolvedSvgPath, renderSvg(result, inputJson), 'utf-8');
+      console.error(`SVG cutting diagram written to ${resolvedSvgPath}`);
+    }
 
     if (parsed.outputPath) {
       const resolvedOutputPath = path.resolve(process.cwd(), parsed.outputPath);

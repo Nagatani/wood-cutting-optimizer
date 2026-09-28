@@ -14,6 +14,7 @@ from .types import (
 from .optimizer1d import optimize_1d
 from .optimizer2d import optimize_2d
 from .validate import validate_1d, validate_2d
+from .svg import render_svg
 from .binpacking import (
     BinDefinition,
     ItemDefinition,
@@ -35,6 +36,7 @@ __all__ = [
     "optimize_2d",
     "validate_1d",
     "validate_2d",
+    "render_svg",
     "bin_pack_1d",
     "BinDefinition",
     "ItemDefinition",

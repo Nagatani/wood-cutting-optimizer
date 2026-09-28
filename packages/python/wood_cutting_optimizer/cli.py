@@ -2,7 +2,7 @@ import sys
 import json
 import argparse
 from pathlib import Path
-from . import optimize
+from . import optimize, render_svg
 
 
 def main():
@@ -24,6 +24,10 @@ def main():
         "-o", "--output",
         help="Path to output JSON file (defaults to stdout)",
     )
+    parser.add_argument(
+        "--svg",
+        help="Also write an SVG cutting diagram to this file",
+    )
 
     args = parser.parse_args()
     input_file = args.input_opt or args.input_pos
@@ -43,6 +47,12 @@ def main():
 
         result = optimize(data)
         out_json = json.dumps(result.to_dict(), indent=2, ensure_ascii=False)
+
+        if args.svg:
+            svg_path = Path(args.svg).resolve()
+            with open(svg_path, "w", encoding="utf-8") as f:
+                f.write(render_svg(result, data))
+            sys.stderr.write(f"SVG cutting diagram written to {svg_path}\n")
 
         if args.output:
             out_path = Path(args.output).resolve()

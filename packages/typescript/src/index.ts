@@ -3,6 +3,7 @@ export * from './binpacking/index.js';
 export { optimize1D } from './optimizer1d.js';
 export { optimize2D } from './optimizer2d.js';
 export { validateInput } from './validate.js';
+export { renderSvg } from './svg.js';
 
 import { InputRequest, OptimizationResult } from './types.js';
 import { optimize1D } from './optimizer1d.js';

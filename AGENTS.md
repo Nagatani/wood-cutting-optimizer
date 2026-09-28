@@ -17,7 +17,8 @@
 
 ```text
 .github/workflows/ci.yml       # CI（TS テスト / Python テスト / 言語間パリティ検証）
-scripts/check_parity.py        # test-cases/ に対して TS と Python の出力が一致するか検証
+scripts/check_parity.py        # test-cases/ に対して TS と Python の出力（JSON と SVG）が一致するか検証
+docs/example-*.svg             # README 掲載用のカット図面サンプル（test-cases から生成）
 specification/schema.json      # 入出力の JSON Schema（言語共通の正）
 test-cases/*.json              # 言語共通の検証シナリオ（{ name, description, input, expected }）
 packages/typescript/
@@ -27,6 +28,7 @@ packages/typescript/
   src/optimizer2d.ts           # 2D ギロチン最適化
   src/validate.ts              # 入力検証（schema.json の制約をチェック）
   src/evaluation.ts            # ヒューリスティクス候補の優劣判定
+  src/svg.ts                   # SVG カット図面レンダラー（renderSvg）
   src/binpacking/              # 汎用 1D ビンパッキング（types.ts, packer1d.ts）
   bin/cli.ts                   # CLI（wood-cutting-optimizer / wood-opt）
   tests/*.test.ts              # node:test
@@ -37,6 +39,7 @@ packages/python/
     optimizer1d.py / optimizer2d.py
     validate.py                # 入力検証（schema.json の制約をチェック）
     evaluation.py              # ヒューリスティクス候補の優劣判定
+    svg.py                     # SVG カット図面レンダラー（render_svg）
     binpacking/                # 汎用 1D ビンパッキング（types.py, packer1d.py）
     cli.py / __main__.py       # CLI（argparse）
   tests/test_*.py              # unittest
@@ -140,11 +143,16 @@ CI（`.github/workflows/ci.yml`）では Node 20/22、Python 3.9/3.13 のテス�
 - サマリーの比率・合計は `toFixed(4)` / `round(…, 4)` 相当で丸めています（ビンパッキングの容量系は 6 桁）。
 - テストでの座標比較は `1e-6` の許容誤差を使っています。浮動小数点の厳密一致に依存するテストは避けてください。
 
+### SVG カット図面（`svg`）
+- TS と Python で **バイト単位で同一の SVG** を出力する（`check_parity.py` で比較）。そのため数値整形（`fmt` / `_fmt`: 小数2桁の四捨五入・末尾ゼロ除去）と文字幅の見積もり（ASCII 0.6em、それ以外 1em）は自前実装。`toFixed` や Python の `round` / `:.2f` は丸め方が異なるので使わないでください。
+- 座標は mm 単位の `viewBox`。フォントサイズは最大寸法 / 45、ラベルが収まらなければ寸法のみ → 非表示の順に縮退する。
+- レンダラーを変更したら `docs/example-*.svg` を再生成してください（`node packages/typescript/dist/bin/cli.js test-cases/2d_guillotine.json --svg docs/example-2d.svg`、1D は `1d_basic.json` → `docs/example-1d.svg`）。
+
 ## 既知の差異・注意点
 
 - `optimize()` は両言語とも `{ "input": {...} }` 形式（テストケースの形）もそのまま受け付けます。
 - `cost` は解の選択基準（総コスト最小）に使われます。未指定なら 2D は面積、1D は長さがコストになります（＝歩留まり最大化）。
-- ロードマップ上の未実装項目: SVG カット図面レンダラー、Rust/WASM/PyO3 移植。
+- ロードマップ上の未実装項目: Rust/WASM/PyO3 移植。
 
 ## コミット
 
