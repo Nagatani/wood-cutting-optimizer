@@ -45,6 +45,18 @@ class TestSvgRenderer(unittest.TestCase):
         self.assertIn("unplaced: 大きすぎる板 ×1", svg)
         ET.fromstring(svg)
 
+    def test_readable_when_no_stock_is_used(self):
+        data = {
+            "dimension": "2D",
+            "stocks": [{"id": "s", "width": 100, "height": 100}],
+            "parts": [{"id": "big", "width": 500, "height": 500}],
+        }
+        root = ET.fromstring(render_svg(optimize(data), data))
+        width = float(root.get("viewBox").split()[2])
+        font_sizes = {el.get("font-size") for el in root.iter(SVG_NS + "text")}
+        self.assertEqual(font_sizes, {"20"})
+        self.assertGreater(width, 300)
+
     def test_falls_back_to_part_ids_without_input(self):
         data = {
             "dimension": "1D",

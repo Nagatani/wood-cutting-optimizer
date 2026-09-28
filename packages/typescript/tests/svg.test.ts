@@ -49,6 +49,19 @@ describe('SVG cutting diagram', () => {
     assert.ok(svg.includes('unplaced: 大きすぎる板 ×1'));
   });
 
+  it('should stay readable when no stock is used', () => {
+    const input: InputRequest = {
+      dimension: '2D',
+      stocks: [{ id: 's', width: 100, height: 100 }],
+      parts: [{ id: 'big', width: 500, height: 500 }],
+    };
+    const svg = renderSvg(optimize(input), input);
+    const [, width] = svg.match(/viewBox="0 0 ([\d.]+) ([\d.]+)"/)!.map(Number);
+    assert.strictEqual(svg.match(/font-size="([\d.]+)"/)![1], '20');
+    assert.ok(width > 300, `canvas too small: ${width}`);
+    assert.ok(svg.includes('unplaced: big ×1'));
+  });
+
   it('should fall back to part ids without input', () => {
     const input: InputRequest = {
       dimension: '1D',

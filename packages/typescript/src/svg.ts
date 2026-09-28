@@ -22,6 +22,9 @@ const STYLE =
   '.remnant-label{fill:#2e6b2e}' +
   '.title{font-weight:bold}';
 
+/** Size (mm) the text scale is based on when no stock was used (e.g. every part is unplaced). */
+const FALLBACK_BASE_SIZE = 900;
+
 /** Labels smaller than this fraction of the base font size are dropped. */
 const MIN_LABEL_RATIO = 0.35;
 
@@ -125,7 +128,8 @@ export function renderSvg(
       maxWidth = Math.max(maxWidth, (stock as StockResult1D).length);
     }
   }
-  const baseSize = Math.max(maxWidth, maxHeight, 1);
+  const maxDimension = Math.max(maxWidth, maxHeight);
+  const baseSize = maxDimension > 0 ? maxDimension : FALLBACK_BASE_SIZE;
   const fontSize = Number(fmt(baseSize / 45));
   const margin = fontSize;
   const barHeight = fontSize * 3.5;

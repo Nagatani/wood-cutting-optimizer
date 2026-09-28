@@ -20,6 +20,9 @@ STYLE = (
     ".title{font-weight:bold}"
 )
 
+# Size (mm) the text scale is based on when no stock was used (e.g. every part is unplaced).
+FALLBACK_BASE_SIZE = 900
+
 # Labels smaller than this fraction of the base font size are dropped.
 MIN_LABEL_RATIO = 0.35
 
@@ -115,7 +118,8 @@ def render_svg(result: OptimizationResult, input_data: Optional[Dict[str, Any]] 
             max_height = max(max_height, stock.height)
         else:
             max_width = max(max_width, stock.length)
-    base_size = max(max_width, max_height, 1)
+    max_dimension = max(max_width, max_height)
+    base_size = max_dimension if max_dimension > 0 else FALLBACK_BASE_SIZE
     font_size = float(_fmt(base_size / 45))
     margin = font_size
     bar_height = font_size * 3.5
