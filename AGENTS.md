@@ -10,16 +10,16 @@
 - 1D（棒材・角材）と 2D（合板などの板材）の歩留まり最適化
 - 木工特有の制約: 鋸刃厚（kerf）、ギロチンカット、木目方向（grain）、再利用可能端材（remnant）
 - 木材制約を持たない汎用 1D ビンパッキング API（`binPack1D` / `bin_pack_1d`）
-- **TypeScript 実装と Python 実装を並行して提供**し、同じアルゴリズム・同じ JSON 入出力仕様を持つ
+- **TypeScript・Python・Rust（WebAssembly 対応）の3実装を並行して提供**し、同じアルゴリズム・同じ JSON 入出力仕様を持つ。同じ入力には同一の結果（JSON・SVG）を返す
 - **ランタイム依存ゼロ（Zero-dependency）** が設計上の必須要件
 
 ## リポジトリ構成
 
 ```text
-.github/workflows/ci.yml       # CI（TS テスト / Python テスト / 言語間パリティ検証）
-scripts/check_parity.py        # test-cases/ に対して TS と Python の出力（JSON と SVG）が一致するか検証
+.github/workflows/ci.yml       # CI（TS / Python / Rust のテスト、4実装のパリティ検証、schema 検証）
+scripts/check_parity.py        # TS（基準）と Python・Rust・WASM の出力（JSON と SVG）が一致するか検証
 scripts/validate_schema.py     # test-cases/ の入力と TS / Python の出力が schema.json に準拠するか検証（要 jsonschema）
-CHANGELOG.md                   # 変更履歴（TS / Python 共通のバージョン）
+CHANGELOG.md                   # 変更履歴（TS / Python / Rust 共通のバージョン）
 docs/example-*.svg             # README 掲載用のカット図面サンプル（test-cases から生成）
 specification/schema.json      # 入出力の JSON Schema（言語共通の正）
 test-cases/*.json              # 言語共通の検証シナリオ（{ name, description, input, expected }）
@@ -45,9 +45,20 @@ packages/python/
     binpacking/                # 汎用 1D ビンパッキング（types.py, packer1d.py）
     cli.py / __main__.py       # CLI（argparse）
   tests/test_*.py              # unittest
+packages/rust/
+  src/lib.rs                   # optimize() / optimize_json() / optimize_request() エントリポイント
+  src/json.rs                  # 依存ゼロの JSON パーサ・シリアライザ（出力は JSON.stringify(v, null, 2) と同一）
+  src/types.rs                 # 入出力型（to_value / from_value）
+  src/validate.rs              # 入力検証（TS と同じ順序・同じメッセージ）
+  src/optimizer1d.rs / optimizer2d.rs / binpacking.rs / evaluation.rs / usage.rs / round.rs
+  src/svg.rs                   # SVG レンダラー（render_svg）
+  src/main.rs                  # CLI
+  src/wasm.rs                  # WebAssembly バインディング（`wasm` feature のときのみ）
+  scripts/wasm-cli.cjs         # WASM ビルド（pkg-node）を CLI 形式で呼ぶ（パリティ検証用）
+  tests/cases.rs               # cargo test（test-cases/ の不変条件・入力検証など）
 ```
 
-TS と Python のファイルは 1 対 1 で対応しています（`optimizer2d.ts` ↔ `optimizer2d.py` など）。
+TS・Python・Rust のファイルは 1 対 1 で対応しています（`optimizer2d.ts` ↔ `optimizer2d.py` ↔ `optimizer2d.rs` など）。
 
 ## セットアップ・ビルド・テスト
 
@@ -64,7 +75,7 @@ npm test          # pretest で dist/ を削除・再ビルドしてから node 
 - ESM（`"type": "module"`、`module: NodeNext`）のため、相対 import には **`.js` 拡張子が必須** です（例: `from './types.js'`）。
 - `strict: true` です。
 - npm パッケージに含まれるのは `dist/src` と `dist/bin`、および npm が自動で含める `README.md` / `LICENSE` / `package.json` です（`package.json` の `files`）。
-- `packages/typescript/LICENSE` と `packages/python/LICENSE` はパッケージ同梱用のルート `LICENSE` のコピーです。ルートを変更したら両方に反映してください。
+- `packages/typescript/LICENSE`・`packages/python/LICENSE`・`packages/rust/LICENSE` はパッケージ同梱用のルート `LICENSE` のコピーです。ルートを変更したらすべてに反映してください。
 - 入力の型（`InputRequest` など）の配列は `readonly` です（ライブラリは入力を変更しない）。`optimize()` の戻り値の型は `OptimizationResultFor<T>` で入力の `dimension` から決まります。
 
 ### Python（`packages/python`）
@@ -79,24 +90,44 @@ python -m wood_cutting_optimizer ../../test-cases/2d_guillotine.json   # CLI 動
 - テストフレームワークは標準の `unittest` のみ（pytest 前提のコードは書かない）。
 - 型ヒント付きパッケージとして `py.typed` を同梱しています（`pyproject.toml` の `package-data`）。
 
-### 言語間パリティ検証（リポジトリルート）
+### Rust（`packages/rust`）
+
+```bash
+cd packages/rust
+cargo fmt --check && cargo clippy --all-targets -- -D warnings
+cargo test
+cargo build --release                # CLI: target/release/wood-cutting-optimizer
+
+# WebAssembly（Node.js 向けバインディングを pkg-node/ に生成）
+rustup target add wasm32-unknown-unknown
+cargo build --release --lib --target wasm32-unknown-unknown --features wasm
+wasm-bindgen target/wasm32-unknown-unknown/release/wood_cutting_optimizer.wasm --out-dir pkg-node --target nodejs
+```
+
+- 本体は依存ゼロ（`std` のみ）。`wasm-bindgen` / `js-sys` は `wasm` feature のときだけ使う optional 依存です。これ以外の crate（serde など）は追加しないでください。
+- `wasm-bindgen` CLI のバージョンは `Cargo.lock` の `wasm-bindgen` と完全に一致させる必要があります（CI は Cargo.lock から読み取って GitHub Releases のバイナリを取得）。
+- 浮動小数点演算は TS と **同じ順序** で書いてください（`a + b - c` の結合順、`Math.min` ↔ `f64::min`、ソートは安定ソート、同点は先勝ち）。丸めは `round::to_fixed`（`Number(x.toFixed(n))` 相当）を使います。
+- `cargo fmt`（`max_width` 既定の 100）に従います。CI は fmt / clippy（`-D warnings`、ネイティブと wasm32 の両方）/ test を実行します。
+
+### 実装間パリティ検証（リポジトリルート）
 
 ```bash
 (cd packages/typescript && npm run build)
-python scripts/check_parity.py      # test-cases/*.json について TS と Python の出力（JSON・SVG）を比較
+python scripts/check_parity.py      # test-cases/*.json について TS・Python（＋ビルド済みなら Rust・WASM）の出力（JSON・SVG）を比較
+python scripts/check_parity.py --require-all path/to/*.json   # Rust・WASM も必須にし、任意の入力で比較
 pip install jsonschema              # 開発時のみ（ライブラリ本体の依存ではない）
 python scripts/validate_schema.py   # test-cases の入力と両言語の出力が schema.json に準拠するか検証
 ```
 
-CI（`.github/workflows/ci.yml`）では Node 20/22、Python 3.9/3.13 のテスト、パリティ検証、schema 準拠の検証を実行します。CLI の挙動（終了コード: 正常 0、入力エラー 1、引数エラー 2）は `tests/cli.test.ts` / `tests/test_cli.py` で両言語同じ内容を検証しています。
+CI（`.github/workflows/ci.yml`）では Node 20/22、Python 3.9/3.13、Rust stable のテスト、4実装（TS / Python / Rust / WASM）のパリティ検証、schema 準拠の検証を実行します。CLI の挙動（終了コード: 正常 0、入力エラー 1、引数エラー 2）は `tests/cli.test.ts` / `tests/test_cli.py` で検証し、Rust の CLI も同じ仕様です。
 
 ### バージョン
-- TS（`package.json` / `package-lock.json`）と Python（`pyproject.toml` / `__init__.py` の `__version__`）は同じバージョン番号にそろえ、変更は `CHANGELOG.md` に記録してください。
+- TS（`package.json` / `package-lock.json`）、Python（`pyproject.toml` / `__init__.py` の `__version__`）、Rust（`Cargo.toml`）は同じバージョン番号にそろえ、変更は `CHANGELOG.md` に記録してください。
 
 ## 必須ルール
 
-1. **依存を追加しない**: ランタイム依存は TS・Python とも禁止。TS は Node.js 標準モジュール、Python は標準ライブラリのみ。TS の devDependencies も `typescript` と `@types/node` のみを維持してください。
-2. **両言語の同期**: アルゴリズム・仕様・公開 API の変更は、原則として TypeScript と Python の **両方に同じ内容で** 反映してください。片方だけの変更は結果の不一致を生みます。
+1. **依存を追加しない**: ランタイム依存は TS・Python・Rust とも禁止。TS は Node.js 標準モジュール、Python は標準ライブラリ、Rust は `std` のみ（WASM 用の optional 依存 `wasm-bindgen` / `js-sys` を除く）。TS の devDependencies も `typescript` と `@types/node` のみを維持してください。
+2. **全実装の同期**: アルゴリズム・仕様・公開 API の変更は、原則として TypeScript・Python・Rust の **すべてに同じ内容で** 反映してください。1つでも漏れると `check_parity.py`（CI）が失敗します。
 3. **仕様の単一の正は `specification/schema.json`**: 入出力フィールドを追加・変更する場合は、schema.json → `src/types.ts` → `types.py` → README の「入出力データ仕様」の順で整合させてください。
 4. **言語共通テストケース**: 新しい振る舞いを追加したら `test-cases/` に JSON シナリオを追加し、TS（`tests/run_cases.test.ts`）と Python（`tests/test_cases.py`）の両方から検証してください。`test-cases/` の全ファイルは収支の不変条件テスト（`robustness` テスト）とパリティ検証の対象にもなります。
 5. **収支の不変条件**: `total_used_measure + total_waste_measure + total_remnant_measure == total_stock_measure` が常に成り立つようにしてください。
@@ -105,7 +136,7 @@ CI（`.github/workflows/ci.yml`）では Node 20/22、Python 3.9/3.13 のテス�
 
 - 木材カット API（`optimize` の入出力）: JSON 仕様に合わせて **両言語とも snake_case**（`min_remnant_size`, `can_rotate`, `yield_rate`, `unplaced_parts` など）。
 - 汎用ビンパッキング API: **TS は camelCase**（`binPack1D`, `itemSpacing`, `binsUsed`）、**Python は snake_case**（`bin_pack_1d`, `item_spacing`, `bins_used`）。各言語の慣習に合わせています。
-- 関数名: TS `optimize1D` / `optimize2D` ↔ Python `optimize_1d` / `optimize_2d`。
+- 関数名: TS `optimize1D` / `optimize2D` ↔ Python・Rust `optimize_1d` / `optimize_2d`。Rust の汎用ビンパッキングは Python と同じ snake_case、WASM の JS 向け API は TS と同じ camelCase（`optimize` / `optimizeJson` / `renderSvg`）。
 
 ## アルゴリズムの要点
 

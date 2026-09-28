@@ -8,7 +8,7 @@
 
 1次元の棒材（角材・ツーバイフォー材等）および2次元の板材（合板・サブロク板等）の歩留まり最適化を行い、鋸刃の厚み（Kerf）、ギロチンカット制約、木目方向（Grain）、再利用可能端材（Remnants）の識別に対応しています。
 
-TypeScript 実装と Python 実装を同等の最適化アルゴリズム・同一の JSON 入出力仕様で提供しています。
+TypeScript・Python・Rust（WebAssembly 対応）の3実装を、同等の最適化アルゴリズム・同一の JSON 入出力仕様で提供しています。同じ入力に対して、どの実装も同一の結果（JSON・SVG）を返します。
 
 ---
 
@@ -23,7 +23,7 @@ TypeScript 実装と Python 実装を同等の最適化アルゴリズム・同�
 | **木目方向 (Grain Direction)** | 部材ごとに「木目沿い（回転禁止）」または「回転許可」を指定可能。原板の木目方向（縦・横）と部材の木目方向を自動判定します。 |
 | **端材 (Remnants) の判定** | 最小再利用可能サイズ（`min_remnant_size`）以上の余白を「再利用可能な端材（Remnant）」としてマークし、ゴミ（Waste/おがくず）と明確に区別します。 |
 | **コスト・歩留まり最適化** | 複数のヒューリスティクス（部材の並べ順・配置先の選び方・カット方向・原材の選び方の組み合わせ）を試し、未配置が最少 → 総コスト最小（`cost` 未指定時は面積／長さ）→ 使用数最少 → 端材最大 の解を採用します。サイズや価格の異なる原材が混在しても、安く済む組み合わせを選びます。 |
-| **Zero-dependency** | ランタイム外部パッケージへの依存は一切ありません。TypeScript は Node.js 標準のみ、Python は標準ライブラリ（3.9+）のみで動作します。 |
+| **Zero-dependency** | ランタイム外部パッケージへの依存は一切ありません。TypeScript は Node.js 標準のみ、Python は標準ライブラリ（3.9+）のみ、Rust は標準ライブラリのみで動作します（WebAssembly ビルド時のみ wasm-bindgen を使用）。 |
 
 ---
 
@@ -49,9 +49,13 @@ wood-cutting-optimizer/
     │   ├── src/            # 1D/2D 最適化、入力検証、SVG レンダラー、汎用ビンパッキング
     │   ├── bin/cli.ts      # CLI ツール
     │   └── tests/          # node:test による自動検証
-    └── python/             # Zero-dependency Python コア
-        ├── wood_cutting_optimizer/ # 1D/2D 最適化、入力検証、SVG レンダラー、CLI
-        └── tests/          # unittest による自動検証
+    ├── python/             # Zero-dependency Python コア
+    │   ├── wood_cutting_optimizer/ # 1D/2D 最適化、入力検証、SVG レンダラー、CLI
+    │   └── tests/          # unittest による自動検証
+    └── rust/               # Zero-dependency Rust コア & WebAssembly バインディング
+        ├── src/            # 1D/2D 最適化、JSON、入力検証、SVG、CLI（main.rs）、WASM（wasm.rs）
+        ├── scripts/        # WASM ビルドを CLI 形式で呼ぶスクリプト（パリティ検証用）
+        └── tests/          # cargo test による自動検証
 ```
 
 ---
@@ -155,6 +159,26 @@ print(f"歩留まり: {result.summary.yield_rate * 100:.1f}%")
 print(f"使用板数: {result.summary.stock_count_used} 枚")
 print(f"ギロチンカット数: {len(result.stocks[0].cuts)} 回")
 ```
+
+---
+
+## クイックスタート (Rust / WebAssembly)
+
+```bash
+cd packages/rust
+cargo build --release
+./target/release/wood-cutting-optimizer -i input.json -o result.json --svg cut-plan.svg
+```
+
+```rust
+use wood_cutting_optimizer::{json, optimize, render_svg};
+
+let input = json::parse(&std::fs::read_to_string("input.json")?)?;
+let result = optimize(&input)?;
+println!("{}", result.to_value().to_pretty_string());
+```
+
+WebAssembly（`--features wasm`）にビルドすると、ブラウザや Node.js から `optimize(input)` / `renderSvg(result, input)` として使えます。ビルド手順は [packages/rust/README.md](packages/rust/README.md) を参照してください。Rust 版は TypeScript 版の約 8〜10 倍高速です（部材5000個の 2D で 0.17 秒）。
 
 ---
 
@@ -263,9 +287,16 @@ cd packages/python
 python -m unittest discover -s tests
 ```
 
-### TypeScript / Python の出力一致検証
+### Rust テスト
+```bash
+cd packages/rust
+cargo test
+```
+
+### 実装間の出力一致検証（TypeScript / Python / Rust / WebAssembly）
 ```bash
 (cd packages/typescript && npm run build)
+(cd packages/rust && cargo build --release)   # 任意: Rust と WASM はビルド済みなら比較対象に入る
 python scripts/check_parity.py
 ```
 
@@ -321,7 +352,8 @@ GitHub Actions（`.github/workflows/ci.yml`）で、上記すべてを push / Pu
 - [x] 言語共通 JSON Schema & テストケース駆動検証
 - [x] SVG カット図面出力レンダラー（プレビュー機能）
 
-- [ ] Rust コアエンジンへの移植 & WebAssembly (wasm-bindgen) / PyO3 バインディング
+- [x] Rust コアエンジンへの移植 & WebAssembly (wasm-bindgen) バインディング
+- [ ] PyO3 バインディング（Python から Rust コアを利用）
 - [x] コスト最適化（複数サイズのストックが存在する場合の最小コスト探索）
 
 ---
