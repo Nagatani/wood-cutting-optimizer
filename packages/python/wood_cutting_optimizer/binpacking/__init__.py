@@ -8,6 +8,7 @@ from .types import (
     UnpackedItem,
     BinPacking1DSummary,
     PackingStrategy1D,
+    BinSelection1D,
 )
 from .packer1d import bin_pack_1d
 
@@ -21,5 +22,6 @@ __all__ = [
     "UnpackedItem",
     "BinPacking1DSummary",
     "PackingStrategy1D",
+    "BinSelection1D",
     "bin_pack_1d",
 ]

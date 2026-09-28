@@ -4,6 +4,14 @@
 
 export type PackingStrategy1D = 'best-fit-decreasing' | 'first-fit-decreasing' | 'worst-fit-decreasing';
 
+/**
+ * Which bin type to open when an item fits in no open bin.
+ * - 'smallest': the smallest capacity that fits the item (default)
+ * - 'largest': the largest capacity
+ * - 'lowest-cost-ratio': the lowest cost per unit of capacity (ties: smaller capacity)
+ */
+export type BinSelection1D = 'smallest' | 'largest' | 'lowest-cost-ratio';
+
 export interface BinDefinition<T = unknown> {
   id: string;
   capacity: number;
@@ -31,6 +39,12 @@ export interface BinPacking1DOptions {
    * Defaults to 'best-fit-decreasing'.
    */
   strategy?: PackingStrategy1D;
+
+  /**
+   * Which bin type to open when an item fits in no open bin.
+   * Defaults to 'smallest'.
+   */
+  binSelection?: BinSelection1D;
 }
 
 export interface PackedItem<T = unknown> {

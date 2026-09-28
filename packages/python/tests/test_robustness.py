@@ -136,6 +136,22 @@ class TestBinPackingValidation(unittest.TestCase):
                 BinPacking1DOptions(item_spacing=-1.0),
             )
 
+    def test_rejects_unknown_bin_selection(self):
+        with self.assertRaisesRegex(ValueError, "Unsupported bin_selection"):
+            bin_pack_1d(
+                [BinDefinition(id="b", capacity=10.0)],
+                [ItemDefinition(id="i", size=5.0)],
+                BinPacking1DOptions(bin_selection="foo"),
+            )
+
+    def test_largest_bin_selection(self):
+        result = bin_pack_1d(
+            [BinDefinition(id="small", capacity=10.0, quantity=5), BinDefinition(id="large", capacity=30.0, quantity=5)],
+            [ItemDefinition(id="i", size=5.0, quantity=6)],
+            BinPacking1DOptions(bin_selection="largest"),
+        )
+        self.assertEqual([b.bin_id for b in result.bins], ["large"])
+
     def test_unlimited_bin_quantity(self):
         result = bin_pack_1d(
             [BinDefinition(id="b", capacity=10.0, quantity=math.inf)],

@@ -7,6 +7,12 @@ TItem = TypeVar("TItem")
 
 PackingStrategy1D = Literal["best-fit-decreasing", "first-fit-decreasing", "worst-fit-decreasing"]
 
+# Which bin type to open when an item fits in no open bin.
+# - "smallest": the smallest capacity that fits the item (default)
+# - "largest": the largest capacity
+# - "lowest-cost-ratio": the lowest cost per unit of capacity (ties: smaller capacity)
+BinSelection1D = Literal["smallest", "largest", "lowest-cost-ratio"]
+
 
 @dataclass
 class BinDefinition(Generic[TBin]):
@@ -29,6 +35,7 @@ class ItemDefinition(Generic[TItem]):
 class BinPacking1DOptions:
     item_spacing: float = 0.0
     strategy: PackingStrategy1D = "best-fit-decreasing"
+    bin_selection: BinSelection1D = "smallest"
 
 
 @dataclass

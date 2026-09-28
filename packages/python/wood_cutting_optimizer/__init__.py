@@ -24,6 +24,7 @@ from .binpacking import (
     UnpackedItem,
     BinPacking1DSummary,
     PackingStrategy1D,
+    BinSelection1D,
     bin_pack_1d,
 )
 
@@ -44,6 +45,7 @@ __all__ = [
     "UnpackedItem",
     "BinPacking1DSummary",
     "PackingStrategy1D",
+    "BinSelection1D",
 ]
 
 

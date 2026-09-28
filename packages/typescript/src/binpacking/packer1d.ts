@@ -2,6 +2,7 @@ import {
   BinDefinition,
   ItemDefinition,
   BinPacking1DOptions,
+  BinSelection1D,
   BinPacking1DResult,
   PackedBin,
   PackedItem,
@@ -12,12 +13,14 @@ import {
 const EPS = 1e-9;
 
 const STRATEGIES: readonly string[] = ['best-fit-decreasing', 'first-fit-decreasing', 'worst-fit-decreasing'];
+const BIN_SELECTIONS: readonly string[] = ['smallest', 'largest', 'lowest-cost-ratio'];
 
 function validateBinPackingInput(
   bins: BinDefinition<unknown>[],
   items: ItemDefinition<unknown>[],
   itemSpacing: number,
-  strategy: string
+  strategy: string,
+  binSelection: string
 ): void {
   if (!Array.isArray(bins)) throw new Error('bins must be an array');
   if (!Array.isArray(items)) throw new Error('items must be an array');
@@ -27,9 +30,15 @@ function validateBinPackingInput(
   if (!STRATEGIES.includes(strategy)) {
     throw new Error(`Unsupported strategy: ${strategy}`);
   }
+  if (!BIN_SELECTIONS.includes(binSelection)) {
+    throw new Error(`Unsupported binSelection: ${binSelection}`);
+  }
   for (const b of bins) {
     if (!Number.isFinite(b.capacity) || b.capacity <= 0) {
       throw new Error(`Bin "${b.id}": capacity must be a finite number > 0 (got ${b.capacity})`);
+    }
+    if (b.cost !== undefined && (!Number.isFinite(b.cost) || b.cost < 0)) {
+      throw new Error(`Bin "${b.id}": cost must be a finite number >= 0 (got ${b.cost})`);
     }
     const q = b.quantity ?? 1;
     if (q !== Infinity && (!Number.isInteger(q) || q < 0)) {
@@ -71,6 +80,41 @@ interface PoolBin<T = unknown> {
 }
 
 /**
+ * Chooses which bin type to open for an item. Returns -1 when no remaining bin can hold it.
+ */
+function chooseBin(binPool: PoolBin<unknown>[], size: number, rule: BinSelection1D): number {
+  let chosenPoolIndex = -1;
+  let bestKey = Infinity;
+  let bestCapacity = Infinity;
+
+  for (let i = 0; i < binPool.length; i++) {
+    const pool = binPool[i];
+    if (pool.remainingQuantity <= 0 || pool.capacity < size - EPS) continue;
+
+    let key: number;
+    switch (rule) {
+      case 'smallest':
+        key = pool.capacity;
+        break;
+      case 'largest':
+        key = -pool.capacity;
+        break;
+      case 'lowest-cost-ratio':
+        key = pool.cost / pool.capacity;
+        break;
+    }
+    // Ties are broken by the smaller capacity, then by input order
+    if (key < bestKey - EPS || (Math.abs(key - bestKey) <= EPS && pool.capacity < bestCapacity)) {
+      bestKey = key;
+      bestCapacity = pool.capacity;
+      chosenPoolIndex = i;
+    }
+  }
+
+  return chosenPoolIndex;
+}
+
+/**
  * 1D Bin Packing algorithm.
  * Packs items into bins with minimal waste, supporting multiple bin sizes,
  * item spacing (e.g. kerf/blade width), and various heuristics (BFD, FFD, WFD).
@@ -82,7 +126,8 @@ export function binPack1D<TBin = unknown, TItem = unknown>(
 ): BinPacking1DResult<TBin, TItem> {
   const itemSpacing = options?.itemSpacing ?? 0;
   const strategy = options?.strategy ?? 'best-fit-decreasing';
-  validateBinPackingInput(bins, items, itemSpacing, strategy);
+  const binSelection = options?.binSelection ?? 'smallest';
+  validateBinPackingInput(bins, items, itemSpacing, strategy, binSelection);
 
   // 1. Flatten items based on quantity
   const expandedItems: ExpandedItem<TItem>[] = [];
@@ -172,20 +217,7 @@ export function binPack1D<TBin = unknown, TItem = unknown>(
       bin.usedOffset = startOffset + item.size;
     } else {
       // Open a new bin from pool
-      // Choose a bin that fits the item with minimal leftover or lowest cost
-      let chosenPoolIndex = -1;
-      let minWaste = Infinity;
-
-      for (let i = 0; i < binPool.length; i++) {
-        const pool = binPool[i];
-        if (pool.remainingQuantity > 0 && pool.capacity >= item.size - EPS) {
-          const waste = pool.capacity - item.size;
-          if (waste < minWaste) {
-            minWaste = waste;
-            chosenPoolIndex = i;
-          }
-        }
-      }
+      const chosenPoolIndex = chooseBin(binPool, item.size, binSelection);
 
       if (chosenPoolIndex !== -1) {
         const chosen = binPool[chosenPoolIndex];

@@ -154,6 +154,7 @@ print(f"ギロチンカット数: {len(result.stocks[0].cuts)} 回")
 - **木材制約フリー**: 刃厚・切断ステップ・端材分類なしでシンプルに利用可能
 - **アイテム間隔 (Spacing)**: 必要に応じてアイテム間の最小間隙（パディングやマージン）をオプション指定可能
 - **複数戦略の選択**: `best-fit-decreasing` (デフォルト), `first-fit-decreasing`, `worst-fit-decreasing`
+- **新規ビンの選び方**: `binSelection`（Python: `bin_selection`）で `smallest`（デフォルト）/ `largest` / `lowest-cost-ratio`（容量あたりコスト最小）を指定可能
 - **メタデータの透過保持**: Bin および Item に呼び出し元の独自オブジェクト（ジェネリクス `data`）を付与可能
 
 ### TypeScript での利用例

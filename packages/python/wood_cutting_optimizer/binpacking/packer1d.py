@@ -19,6 +19,7 @@ TItem = TypeVar("TItem")
 EPS = 1e-9
 
 _STRATEGIES = ("best-fit-decreasing", "first-fit-decreasing", "worst-fit-decreasing")
+_BIN_SELECTIONS = ("smallest", "largest", "lowest-cost-ratio")
 
 
 def _is_number(value: Any) -> bool:
@@ -30,14 +31,19 @@ def _validate_bin_packing_input(
     items: List[ItemDefinition],
     item_spacing: Any,
     strategy: Any,
+    bin_selection: Any,
 ) -> None:
     if not _is_number(item_spacing) or item_spacing < 0:
         raise ValueError(f"item_spacing must be a finite number >= 0 (got {item_spacing})")
     if strategy not in _STRATEGIES:
         raise ValueError(f"Unsupported strategy: {strategy}")
+    if bin_selection not in _BIN_SELECTIONS:
+        raise ValueError(f"Unsupported bin_selection: {bin_selection}")
     for b in bins:
         if not _is_number(b.capacity) or b.capacity <= 0:
             raise ValueError(f'Bin "{b.id}": capacity must be a finite number > 0 (got {b.capacity})')
+        if b.cost is not None and (not _is_number(b.cost) or b.cost < 0):
+            raise ValueError(f'Bin "{b.id}": cost must be a finite number >= 0 (got {b.cost})')
         q = b.quantity if b.quantity is not None else 1
         if q != math.inf and (not isinstance(q, int) or isinstance(q, bool) or q < 0):
             raise ValueError(f'Bin "{b.id}": quantity must be an integer >= 0 or math.inf (got {q})')
@@ -75,6 +81,32 @@ class _PoolBin:
         self.data = data
 
 
+def _choose_bin(bin_pool: List[_PoolBin], size: float, rule: str) -> int:
+    """Chooses which bin type to open for an item. Returns -1 when no remaining bin can hold it."""
+    chosen_pool_idx = -1
+    best_key = float("inf")
+    best_capacity = float("inf")
+
+    for i, pool in enumerate(bin_pool):
+        if pool.remaining_quantity <= 0 or pool.capacity < size - EPS:
+            continue
+
+        if rule == "smallest":
+            key = pool.capacity
+        elif rule == "largest":
+            key = -pool.capacity
+        else:  # lowest-cost-ratio
+            key = pool.cost / pool.capacity
+
+        # Ties are broken by the smaller capacity, then by input order
+        if key < best_key - EPS or (abs(key - best_key) <= EPS and pool.capacity < best_capacity):
+            best_key = key
+            best_capacity = pool.capacity
+            chosen_pool_idx = i
+
+    return chosen_pool_idx
+
+
 def bin_pack_1d(
     bins: List[BinDefinition[TBin]],
     items: List[ItemDefinition[TItem]],
@@ -85,7 +117,8 @@ def bin_pack_1d(
 
     item_spacing = options.item_spacing
     strategy = options.strategy
-    _validate_bin_packing_input(bins, items, item_spacing, strategy)
+    bin_selection = options.bin_selection
+    _validate_bin_packing_input(bins, items, item_spacing, strategy, bin_selection)
     item_spacing = float(item_spacing)
 
     # 1. Flatten items based on quantity
@@ -164,15 +197,7 @@ def bin_pack_1d(
             bin_obj.used_offset = start_offset + item.size
         else:
             # Open new bin from pool
-            chosen_pool_idx = -1
-            min_waste = float("inf")
-
-            for i, pool in enumerate(bin_pool):
-                if pool.remaining_quantity > 0 and pool.capacity >= item.size - EPS:
-                    waste = pool.capacity - item.size
-                    if waste < min_waste:
-                        min_waste = waste
-                        chosen_pool_idx = i
+            chosen_pool_idx = _choose_bin(bin_pool, item.size, bin_selection)
 
             if chosen_pool_idx != -1:
                 chosen = bin_pool[chosen_pool_idx]

@@ -146,6 +146,25 @@ describe('Generic 1D Bin Packing validation', () => {
     );
   });
 
+  it('should reject unknown binSelection', () => {
+    assert.throws(
+      () => binPack1D([{ id: 'b', capacity: 10 }], [{ id: 'i', size: 5 }], { binSelection: 'foo' as any }),
+      /Unsupported binSelection/
+    );
+  });
+
+  it('should open the largest bin with binSelection "largest"', () => {
+    const result = binPack1D(
+      [
+        { id: 'small', capacity: 10, quantity: 5 },
+        { id: 'large', capacity: 30, quantity: 5 },
+      ],
+      [{ id: 'i', size: 5, quantity: 6 }],
+      { binSelection: 'largest' }
+    );
+    assert.deepStrictEqual(result.bins.map((b) => b.binId), ['large']);
+  });
+
   it('should allow unlimited bin quantity (Infinity)', () => {
     const result = binPack1D([{ id: 'b', capacity: 10, quantity: Infinity }], [{ id: 'i', size: 6, quantity: 5 }]);
     assert.strictEqual(result.summary.binsUsed, 5);
