@@ -112,6 +112,26 @@ describe('Cost-aware stock selection', () => {
   }
 });
 
+describe('Remnant orientation', () => {
+  const input = (grain: 'none' | 'length'): InputRequest => ({
+    dimension: '2D',
+    min_remnant_size: { width: 100, height: 300 },
+    stocks: [{ id: 's', width: 1000, height: 1000, grain }],
+    parts: [{ id: 'a', width: 1000, height: 850, can_rotate: false }],
+  });
+
+  it('should accept a turned leftover as remnant when the stock has no grain', () => {
+    const stock = optimize(input('none')).stocks[0] as StockResult2D;
+    assert.deepStrictEqual(stock.remnants, [{ x: 0, y: 850, width: 1000, height: 150 }]);
+  });
+
+  it('should keep the orientation fixed when the stock has grain', () => {
+    const stock = optimize(input('length')).stocks[0] as StockResult2D;
+    assert.strictEqual(stock.remnants.length, 0);
+    assert.strictEqual(stock.waste.length, 1);
+  });
+});
+
 describe('Input handling', () => {
   const valid: InputRequest = {
     dimension: '1D',

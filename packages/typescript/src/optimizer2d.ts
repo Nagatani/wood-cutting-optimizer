@@ -397,10 +397,7 @@ function buildResult(
     for (const rect of stock.freeRects) {
       if (rect.width <= 0 || rect.height <= 0) continue;
 
-      const isRemnant =
-        rect.width >= minRemnantWidth &&
-        rect.height >= minRemnantHeight &&
-        (minRemnantWidth > 0 || minRemnantHeight > 0);
+      const isRemnant = isRemnantRect(rect, stock.grain, minRemnantWidth, minRemnantHeight);
 
       const area = rect.width * rect.height;
       if (isRemnant) {
@@ -472,6 +469,25 @@ function buildResult(
       cutCount,
     },
   };
+}
+
+/**
+ * A leftover rect is a reusable remnant when it meets min_remnant_size.
+ * Without grain the remnant can be turned, so either orientation qualifies;
+ * with grain the orientation is fixed.
+ */
+function isRemnantRect(
+  rect: FreeRect,
+  stockGrain: GrainDirection,
+  minRemnantWidth: number,
+  minRemnantHeight: number
+): boolean {
+  if (minRemnantWidth <= 0 && minRemnantHeight <= 0) {
+    return false;
+  }
+  const fitsAsIs = rect.width >= minRemnantWidth && rect.height >= minRemnantHeight;
+  const fitsTurned = rect.height >= minRemnantWidth && rect.width >= minRemnantHeight;
+  return fitsAsIs || (stockGrain === 'none' && fitsTurned);
 }
 
 /**

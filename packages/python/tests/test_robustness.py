@@ -9,7 +9,7 @@ from wood_cutting_optimizer.binpacking import (
     ItemDefinition,
     BinPacking1DOptions,
 )
-from wood_cutting_optimizer.types import Cut1D, Segment1D
+from wood_cutting_optimizer.types import Cut1D, Segment1D, Rect2D
 
 TEST_CASES_DIR = Path(__file__).resolve().parent.parent.parent.parent / "test-cases"
 if not TEST_CASES_DIR.exists():
@@ -99,6 +99,26 @@ class TestCostAwareSelection(unittest.TestCase):
                 self.assertEqual(len(result.unplaced_parts), 0)
                 self.assertEqual([s.stock_id for s in result.stocks], case_data["expected"]["stock_ids"])
                 self.assertEqual(sum(costs[s.stock_id] for s in result.stocks), case_data["expected"]["total_cost"])
+
+
+class TestRemnantOrientation(unittest.TestCase):
+    @staticmethod
+    def _input(grain):
+        return {
+            "dimension": "2D",
+            "min_remnant_size": {"width": 100, "height": 300},
+            "stocks": [{"id": "s", "width": 1000, "height": 1000, "grain": grain}],
+            "parts": [{"id": "a", "width": 1000, "height": 850, "can_rotate": False}],
+        }
+
+    def test_turned_remnant_without_grain(self):
+        stock = optimize(self._input("none")).stocks[0]
+        self.assertEqual(stock.remnants, [Rect2D(x=0.0, y=850.0, width=1000.0, height=150.0)])
+
+    def test_fixed_orientation_with_grain(self):
+        stock = optimize(self._input("length")).stocks[0]
+        self.assertEqual(len(stock.remnants), 0)
+        self.assertEqual(len(stock.waste), 1)
 
 
 class TestInputHandling(unittest.TestCase):

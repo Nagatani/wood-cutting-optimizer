@@ -396,6 +396,24 @@ def _run_heuristic(
     return active_stocks, unplaced_parts_map
 
 
+def _is_remnant_rect(
+    rect: FreeRect,
+    stock_grain: GrainDirection,
+    min_remnant_width: float,
+    min_remnant_height: float,
+) -> bool:
+    """
+    A leftover rect is a reusable remnant when it meets min_remnant_size.
+    Without grain the remnant can be turned, so either orientation qualifies;
+    with grain the orientation is fixed.
+    """
+    if min_remnant_width <= 0 and min_remnant_height <= 0:
+        return False
+    fits_as_is = rect.width >= min_remnant_width and rect.height >= min_remnant_height
+    fits_turned = rect.height >= min_remnant_width and rect.width >= min_remnant_height
+    return fits_as_is or (stock_grain == "none" and fits_turned)
+
+
 def _build_result(
     active_stocks: List[ActiveStock2D],
     unplaced_parts_map: Dict[str, int],
@@ -430,11 +448,7 @@ def _build_result(
             if rect.width <= 0 or rect.height <= 0:
                 continue
 
-            is_remnant = (
-                rect.width >= min_remnant_width
-                and rect.height >= min_remnant_height
-                and (min_remnant_width > 0 or min_remnant_height > 0)
-            )
+            is_remnant = _is_remnant_rect(rect, stock.grain, min_remnant_width, min_remnant_height)
 
             area = rect.width * rect.height
             if is_remnant:

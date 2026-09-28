@@ -127,7 +127,7 @@ CI（`.github/workflows/ci.yml`）では Node 20/22、Python 3.9/3.13 のテス�
   - シートか部材のどちらかが `grain: "none"` なら向きは自由。
   - 両方に木目があれば、同じ向きなら非回転のみ、異なれば 90° 回転のみ許可。
   - `can_rotate` のデフォルトは `true`、`grain` のデフォルトは `"none"`。
-- 最終的に残った空き矩形のうち、`min_remnant_size` の width/height を両方満たすものは remnant、それ以外は waste。
+- 最終的に残った空き矩形のうち、`min_remnant_size` を満たすものは remnant、それ以外は waste。原板が `grain: "none"` なら縦横どちらの向きで満たしてもよく、木目がある原板では向きを固定して判定する。
 - 切断ロスは実際に刃が削った面積（`min(kerf, 残り幅) * cut.length`）を `cutLossArea` / `cut_loss_area` に積算して waste に加算。余りが kerf より薄いと `kerf * length` より小さくなる。
 
 ### 入力検証・浮動小数点
