@@ -18,6 +18,9 @@ from .binpacking import (
     BinPacking1DOptions,
     bin_pack_1d,
 )
+from .validate import validate_1d
+
+EPS = 1e-9
 
 
 def optimize_1d(
@@ -26,7 +29,8 @@ def optimize_1d(
     kerf: float = 0.0,
     min_remnant_size: Optional[MinRemnantSize] = None,
 ) -> OptimizationResult:
-    kerf = max(0.0, float(kerf))
+    validate_1d(stocks, parts, kerf, min_remnant_size)
+    kerf = float(kerf)
     min_remnant_length = float(min_remnant_size.length) if (min_remnant_size and min_remnant_size.length is not None) else 0.0
 
     bins = [
@@ -87,19 +91,35 @@ def optimize_1d(
 
         total_placed_count += len(placements)
 
+        # Cut loss between parts
+        cut_loss = len(cuts) * kerf
+
         remaining = packed_bin.remaining_capacity
         remnants: List[Segment1D] = []
         waste: List[Segment1D] = []
 
-        if remaining > 0:
-            if min_remnant_length > 0 and remaining >= min_remnant_length:
-                remnants.append(Segment1D(x=packed_bin.used_capacity, length=remaining))
-                total_remnant_measure += remaining
-            else:
-                waste.append(Segment1D(x=packed_bin.used_capacity, length=remaining))
-                total_waste_measure += remaining
+        if remaining > EPS:
+            # A final cut separates the last part from the leftover.
+            # If the leftover is thinner than the kerf, the blade consumes all of it.
+            end_cut_loss = min(kerf, remaining)
+            cuts.append(Cut1D(
+                x=packed_bin.used_capacity,
+                kerf=kerf,
+                step=len(cuts) + 1,
+            ))
+            cut_loss += end_cut_loss
 
-        cut_loss = len(cuts) * kerf
+            leftover = round(remaining - end_cut_loss, 6)
+            if leftover > EPS:
+                segment = Segment1D(x=packed_bin.used_capacity + end_cut_loss, length=leftover)
+                if min_remnant_length > 0 and leftover >= min_remnant_length:
+                    remnants.append(segment)
+                    total_remnant_measure += leftover
+                else:
+                    waste.append(segment)
+                    total_waste_measure += leftover
+
+        # Cut loss is also considered waste
         total_waste_measure += cut_loss
 
         result_stocks.append(StockResult1D(

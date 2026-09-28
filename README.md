@@ -224,6 +224,14 @@ cd packages/python
 python -m unittest discover -s tests
 ```
 
+### TypeScript / Python の出力一致検証
+```bash
+(cd packages/typescript && npm run build)
+python scripts/check_parity.py
+```
+
+GitHub Actions（`.github/workflows/ci.yml`）で、上記すべてを push / Pull Request ごとに実行しています。
+
 ---
 
 ## 入出力データ仕様 (Summary)
@@ -243,6 +251,10 @@ python -m unittest discover -s tests
   - `remnants`: 再利用可能な端材矩形リスト
   - `waste`: 廃棄余白矩形リスト
 - `unplaced_parts`: 在庫不足等で収容しきれなかった部材のリスト
+
+### 入力検証
+- 仕様に反する入力（負や 0 の寸法、整数でない `quantity`、負の `kerf`、未知の `grain` / `dimension` など）はエラーになります（TypeScript: `Error`、Python: `ValueError`。メッセージは `Invalid input: ...`）。
+- `cost` は入力として受け付けますが、現バージョンの在庫選択には使われません（ロードマップの「コスト最適化」で対応予定）。
 
 ---
 

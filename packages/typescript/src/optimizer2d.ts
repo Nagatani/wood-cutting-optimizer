@@ -10,6 +10,10 @@ import {
   UnplacedPart,
   GrainDirection,
 } from './types.js';
+import { validateInput } from './validate.js';
+
+/** Tolerance for floating-point comparisons (e.g. 0.1 + 0.2 fitting into 0.3). */
+const EPS = 1e-9;
 
 interface ExpandedPart2D {
   partId: string;
@@ -38,6 +42,7 @@ interface ActiveStock2D {
   placements: Placement2D[];
   cuts: Cut2D[];
   cutStepCount: number;
+  cutLossArea: number; // Actual material removed by the blade
 }
 
 interface PlacementFit {
@@ -82,7 +87,8 @@ function isOrientationAllowed(
  * 2D Guillotine Bin Packing Optimizer with Kerf, Grain, and Remnant constraints.
  */
 export function optimize2D(input: InputRequest): OptimizationResult {
-  const kerf = Math.max(0, input.kerf ?? 0);
+  validateInput(input);
+  const kerf = input.kerf ?? 0;
   const minRemnantWidth = input.min_remnant_size?.width ?? 0;
   const minRemnantHeight = input.min_remnant_size?.height ?? 0;
 
@@ -166,13 +172,13 @@ export function optimize2D(input: InputRequest): OptimizationResult {
         if (pool.remainingQuantity > 0) {
           // Check if part can fit in this stock at all (including grain constraints)
           const canFitUnrotated =
-            part.width <= pool.width &&
-            part.height <= pool.height &&
+            part.width <= pool.width + EPS &&
+            part.height <= pool.height + EPS &&
             isOrientationAllowed(pool.grain, part.grain, part.canRotate, false);
 
           const canFitRotated =
-            part.height <= pool.width &&
-            part.width <= pool.height &&
+            part.height <= pool.width + EPS &&
+            part.width <= pool.height + EPS &&
             isOrientationAllowed(pool.grain, part.grain, part.canRotate, true);
 
           if (canFitUnrotated || canFitRotated) {
@@ -206,6 +212,7 @@ export function optimize2D(input: InputRequest): OptimizationResult {
           placements: [],
           cuts: [],
           cutStepCount: 0,
+          cutLossArea: 0,
         };
 
         const fit = findBestFit(newStock, part);
@@ -274,12 +281,8 @@ export function optimize2D(input: InputRequest): OptimizationResult {
       }
     }
 
-    // Cut loss area (kerf * length)
-    let cutLossArea = 0;
-    for (const cut of stock.cuts) {
-      cutLossArea += cut.kerf * cut.length;
-    }
-    totalWasteMeasure += cutLossArea;
+    // Cut loss area (kerf * length, or less when the leftover was thinner than the kerf)
+    totalWasteMeasure += stock.cutLossArea;
 
     resultStocks.push({
       stock_id: stock.stockId,
@@ -306,8 +309,8 @@ export function optimize2D(input: InputRequest): OptimizationResult {
       stock_count_used: resultStocks.length,
       parts_placed: totalPlacedCount,
       parts_total: totalPartsCount,
-      total_stock_measure: totalStockMeasure,
-      total_used_measure: totalUsedMeasure,
+      total_stock_measure: Number(totalStockMeasure.toFixed(4)),
+      total_used_measure: Number(totalUsedMeasure.toFixed(4)),
       total_waste_measure: Number(totalWasteMeasure.toFixed(4)),
       total_remnant_measure: Number(totalRemnantMeasure.toFixed(4)),
       yield_rate: Number(yieldRate.toFixed(4)),
@@ -329,8 +332,8 @@ function findBestFit(stock: ActiveStock2D, part: ExpandedPart2D): PlacementFit |
 
     // Try unrotated
     if (
-      part.width <= free.width &&
-      part.height <= free.height &&
+      part.width <= free.width + EPS &&
+      part.height <= free.height + EPS &&
       isOrientationAllowed(stock.grain, part.grain, part.canRotate, false)
     ) {
       const leftoverW = free.width - part.width;
@@ -350,8 +353,8 @@ function findBestFit(stock: ActiveStock2D, part: ExpandedPart2D): PlacementFit |
 
     // Try rotated (90 deg)
     if (
-      part.height <= free.width &&
-      part.width <= free.height &&
+      part.height <= free.width + EPS &&
+      part.width <= free.height + EPS &&
       isOrientationAllowed(stock.grain, part.grain, part.canRotate, true)
     ) {
       const leftoverW = free.width - part.height;
@@ -402,14 +405,20 @@ function placePartInStock(
 
   const leftoverW = free.width - pw;
   const leftoverH = free.height - ph;
+  const hasLeftoverW = leftoverW > EPS;
+  const hasLeftoverH = leftoverH > EPS;
 
   // Guillotine Split Decision: Shorter Leftover Axis Split (SLAS)
   // Split along the axis that leaves the smaller remnant, maximizing the size of the other remnant.
   const splitHorizontal = leftoverW <= leftoverH;
 
+  // Width/height of the free rects left after the blade passes (<= 0 when the kerf eats the leftover)
+  const topH = free.height - ph - kerf;
+  const rightW = free.width - pw - kerf;
+
   if (splitHorizontal) {
     // Horizontal cut across the full width of this free rect at (px, py + ph)
-    if (leftoverH > 0) {
+    if (hasLeftoverH) {
       stock.cuts.push({
         type: 'horizontal',
         x: px,
@@ -418,10 +427,11 @@ function placePartInStock(
         kerf: kerf,
         step: ++stock.cutStepCount,
       });
+      stock.cutLossArea += Math.min(kerf, leftoverH) * free.width;
     }
 
     // Vertical cut from base to horizontal cut line at (px + pw, py)
-    if (leftoverW > 0) {
+    if (hasLeftoverW) {
       stock.cuts.push({
         type: 'vertical',
         x: px + pw,
@@ -430,11 +440,11 @@ function placePartInStock(
         kerf: kerf,
         step: ++stock.cutStepCount,
       });
+      stock.cutLossArea += Math.min(kerf, leftoverW) * ph;
     }
 
     // Top free rect
-    const topH = free.height - ph - (leftoverH > 0 ? kerf : 0);
-    if (topH > 0) {
+    if (hasLeftoverH && topH > EPS) {
       stock.freeRects.push({
         x: px,
         y: py + ph + kerf,
@@ -444,8 +454,7 @@ function placePartInStock(
     }
 
     // Right free rect
-    const rightW = free.width - pw - (leftoverW > 0 ? kerf : 0);
-    if (rightW > 0) {
+    if (hasLeftoverW && rightW > EPS) {
       stock.freeRects.push({
         x: px + pw + kerf,
         y: py,
@@ -455,7 +464,7 @@ function placePartInStock(
     }
   } else {
     // Vertical cut across the full height of this free rect at (px + pw, py)
-    if (leftoverW > 0) {
+    if (hasLeftoverW) {
       stock.cuts.push({
         type: 'vertical',
         x: px + pw,
@@ -464,10 +473,11 @@ function placePartInStock(
         kerf: kerf,
         step: ++stock.cutStepCount,
       });
+      stock.cutLossArea += Math.min(kerf, leftoverW) * free.height;
     }
 
     // Horizontal cut within the column at (px, py + ph)
-    if (leftoverH > 0) {
+    if (hasLeftoverH) {
       stock.cuts.push({
         type: 'horizontal',
         x: px,
@@ -476,11 +486,11 @@ function placePartInStock(
         kerf: kerf,
         step: ++stock.cutStepCount,
       });
+      stock.cutLossArea += Math.min(kerf, leftoverH) * pw;
     }
 
     // Right free rect
-    const rightW = free.width - pw - (leftoverW > 0 ? kerf : 0);
-    if (rightW > 0) {
+    if (hasLeftoverW && rightW > EPS) {
       stock.freeRects.push({
         x: px + pw + kerf,
         y: py,
@@ -490,8 +500,7 @@ function placePartInStock(
     }
 
     // Top free rect
-    const topH = free.height - ph - (leftoverH > 0 ? kerf : 0);
-    if (topH > 0) {
+    if (hasLeftoverH && topH > EPS) {
       stock.freeRects.push({
         x: px,
         y: py + ph + kerf,

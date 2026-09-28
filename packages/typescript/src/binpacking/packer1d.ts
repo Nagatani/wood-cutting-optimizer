@@ -8,6 +8,45 @@ import {
   UnpackedItem,
 } from './types.js';
 
+/** Tolerance for floating-point comparisons (e.g. 0.1 + 0.2 fitting into 0.3). */
+const EPS = 1e-9;
+
+const STRATEGIES: readonly string[] = ['best-fit-decreasing', 'first-fit-decreasing', 'worst-fit-decreasing'];
+
+function validateBinPackingInput(
+  bins: BinDefinition<unknown>[],
+  items: ItemDefinition<unknown>[],
+  itemSpacing: number,
+  strategy: string
+): void {
+  if (!Array.isArray(bins)) throw new Error('bins must be an array');
+  if (!Array.isArray(items)) throw new Error('items must be an array');
+  if (!Number.isFinite(itemSpacing) || itemSpacing < 0) {
+    throw new Error(`itemSpacing must be a finite number >= 0 (got ${itemSpacing})`);
+  }
+  if (!STRATEGIES.includes(strategy)) {
+    throw new Error(`Unsupported strategy: ${strategy}`);
+  }
+  for (const b of bins) {
+    if (!Number.isFinite(b.capacity) || b.capacity <= 0) {
+      throw new Error(`Bin "${b.id}": capacity must be a finite number > 0 (got ${b.capacity})`);
+    }
+    const q = b.quantity ?? 1;
+    if (q !== Infinity && (!Number.isInteger(q) || q < 0)) {
+      throw new Error(`Bin "${b.id}": quantity must be an integer >= 0 or Infinity (got ${q})`);
+    }
+  }
+  for (const it of items) {
+    if (!Number.isFinite(it.size) || it.size <= 0) {
+      throw new Error(`Item "${it.id}": size must be a finite number > 0 (got ${it.size})`);
+    }
+    const q = it.quantity ?? 1;
+    if (!Number.isInteger(q) || q < 0) {
+      throw new Error(`Item "${it.id}": quantity must be an integer >= 0 (got ${q})`);
+    }
+  }
+}
+
 interface ExpandedItem<T = unknown> {
   id: string;
   size: number;
@@ -41,14 +80,15 @@ export function binPack1D<TBin = unknown, TItem = unknown>(
   items: ItemDefinition<TItem>[],
   options?: BinPacking1DOptions
 ): BinPacking1DResult<TBin, TItem> {
-  const itemSpacing = Math.max(0, options?.itemSpacing ?? 0);
+  const itemSpacing = options?.itemSpacing ?? 0;
   const strategy = options?.strategy ?? 'best-fit-decreasing';
+  validateBinPackingInput(bins, items, itemSpacing, strategy);
 
   // 1. Flatten items based on quantity
   const expandedItems: ExpandedItem<TItem>[] = [];
   let totalItemsCount = 0;
   for (const item of items) {
-    const qty = Math.max(0, item.quantity ?? 1);
+    const qty = item.quantity ?? 1;
     totalItemsCount += qty;
     for (let i = 0; i < qty; i++) {
       expandedItems.push({
@@ -85,7 +125,7 @@ export function binPack1D<TBin = unknown, TItem = unknown>(
         const bin = activeBins[i];
         const additionalSpace = bin.items.length > 0 ? itemSpacing + item.size : item.size;
         const spaceLeft = bin.capacity - bin.usedOffset;
-        if (spaceLeft >= additionalSpace) {
+        if (spaceLeft >= additionalSpace - EPS) {
           const remaining = spaceLeft - additionalSpace;
           if (remaining < minRemainingSpace) {
             minRemainingSpace = remaining;
@@ -98,7 +138,7 @@ export function binPack1D<TBin = unknown, TItem = unknown>(
         const bin = activeBins[i];
         const additionalSpace = bin.items.length > 0 ? itemSpacing + item.size : item.size;
         const spaceLeft = bin.capacity - bin.usedOffset;
-        if (spaceLeft >= additionalSpace) {
+        if (spaceLeft >= additionalSpace - EPS) {
           chosenBinIndex = i;
           break;
         }
@@ -109,7 +149,7 @@ export function binPack1D<TBin = unknown, TItem = unknown>(
         const bin = activeBins[i];
         const additionalSpace = bin.items.length > 0 ? itemSpacing + item.size : item.size;
         const spaceLeft = bin.capacity - bin.usedOffset;
-        if (spaceLeft >= additionalSpace) {
+        if (spaceLeft >= additionalSpace - EPS) {
           const remaining = spaceLeft - additionalSpace;
           if (remaining > maxRemainingSpace) {
             maxRemainingSpace = remaining;
@@ -138,7 +178,7 @@ export function binPack1D<TBin = unknown, TItem = unknown>(
 
       for (let i = 0; i < binPool.length; i++) {
         const pool = binPool[i];
-        if (pool.remainingQuantity > 0 && pool.capacity >= item.size) {
+        if (pool.remainingQuantity > 0 && pool.capacity >= item.size - EPS) {
           const waste = pool.capacity - item.size;
           if (waste < minWaste) {
             minWaste = waste;

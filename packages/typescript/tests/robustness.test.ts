@@ -1,0 +1,153 @@
+import { describe, it } from 'node:test';
+import * as assert from 'node:assert';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { optimize, binPack1D, InputRequest, StockResult1D, StockResult2D } from '../src/index.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const testCasesDir = fs.existsSync(path.resolve(__dirname, '../../../../test-cases'))
+  ? path.resolve(__dirname, '../../../../test-cases')
+  : path.resolve(process.cwd(), '../../test-cases');
+
+const caseFiles = fs.readdirSync(testCasesDir).filter((f) => f.endsWith('.json'));
+
+describe('Invariants across all shared test cases', () => {
+  for (const file of caseFiles) {
+    it(`used + waste + remnant equals stock measure (${file})`, () => {
+      const caseData = JSON.parse(fs.readFileSync(path.join(testCasesDir, file), 'utf-8'));
+      const { summary } = optimize(caseData.input);
+      const total =
+        summary.total_used_measure + summary.total_waste_measure + summary.total_remnant_measure;
+      assert.ok(
+        Math.abs(total - summary.total_stock_measure) < 1e-3,
+        `Balance mismatch: ${total} vs ${summary.total_stock_measure}`
+      );
+    });
+  }
+});
+
+describe('1D cutting', () => {
+  it('should add a final cut and subtract kerf before the leftover', () => {
+    const result = optimize({
+      dimension: '1D',
+      kerf: 3,
+      min_remnant_size: { length: 100 },
+      stocks: [{ id: 's', length: 1000 }],
+      parts: [{ id: 'a', length: 400 }],
+    });
+    const stock = result.stocks[0] as StockResult1D;
+    assert.deepStrictEqual(stock.cuts, [{ x: 400, kerf: 3, step: 1 }]);
+    assert.deepStrictEqual(stock.remnants, [{ x: 403, length: 597 }]);
+    assert.strictEqual(result.summary.total_waste_measure, 3);
+  });
+
+  it('should treat a leftover thinner than the kerf as cut loss', () => {
+    const result = optimize({
+      dimension: '1D',
+      kerf: 3,
+      stocks: [{ id: 's', length: 1000 }],
+      parts: [{ id: 'a', length: 998 }],
+    });
+    const stock = result.stocks[0] as StockResult1D;
+    assert.strictEqual(stock.cuts.length, 1);
+    assert.strictEqual(stock.waste.length, 0);
+    assert.strictEqual(result.summary.total_waste_measure, 2);
+  });
+
+  it('should tolerate floating-point error when parts fill the stock exactly', () => {
+    const result = optimize({
+      dimension: '1D',
+      stocks: [{ id: 's', length: 0.3 }],
+      parts: [
+        { id: 'a', length: 0.1 },
+        { id: 'b', length: 0.2 },
+      ],
+    });
+    assert.strictEqual(result.summary.stock_count_used, 1);
+    assert.strictEqual(result.unplaced_parts.length, 0);
+  });
+});
+
+describe('2D cutting', () => {
+  it('should count only the actual cut loss when the leftover is thinner than the kerf', () => {
+    const result = optimize({
+      dimension: '2D',
+      kerf: 3,
+      stocks: [{ id: 's', width: 100, height: 100 }],
+      parts: [{ id: 'a', width: 99, height: 100 }],
+    });
+    assert.strictEqual(result.summary.total_waste_measure, 100);
+    assert.strictEqual((result.stocks[0] as StockResult2D).waste.length, 0);
+  });
+
+  it('should tolerate floating-point error when parts fill the stock exactly', () => {
+    const result = optimize({
+      dimension: '2D',
+      stocks: [{ id: 's', width: 0.3, height: 1 }],
+      parts: [
+        { id: 'a', width: 0.1, height: 1, can_rotate: false },
+        { id: 'b', width: 0.2, height: 1, can_rotate: false },
+      ],
+    });
+    assert.strictEqual(result.unplaced_parts.length, 0);
+  });
+});
+
+describe('Input handling', () => {
+  const valid: InputRequest = {
+    dimension: '1D',
+    stocks: [{ id: 's', length: 100 }],
+    parts: [{ id: 'a', length: 10 }],
+  };
+
+  it('should accept the test case wrapper form { input }', () => {
+    assert.deepStrictEqual(optimize({ input: valid }), optimize(valid));
+  });
+
+  const invalidCases: [string, unknown][] = [
+    ['unknown dimension', { ...valid, dimension: '3D' }],
+    ['negative kerf', { ...valid, kerf: -1 }],
+    ['negative part length', { ...valid, parts: [{ id: 'a', length: -5 }] }],
+    ['zero stock length', { ...valid, stocks: [{ id: 's', length: 0 }] }],
+    ['fractional quantity', { ...valid, parts: [{ id: 'a', length: 10, quantity: 2.5 }] }],
+    ['missing id', { ...valid, parts: [{ length: 10 }] }],
+    ['stocks not an array', { ...valid, stocks: null }],
+    [
+      'invalid grain',
+      {
+        dimension: '2D',
+        stocks: [{ id: 's', width: 100, height: 100, grain: 'diagonal' }],
+        parts: [{ id: 'a', width: 10, height: 10 }],
+      },
+    ],
+  ];
+
+  for (const [label, input] of invalidCases) {
+    it(`should reject ${label}`, () => {
+      assert.throws(() => optimize(input as InputRequest), /Invalid input/);
+    });
+  }
+});
+
+describe('Generic 1D Bin Packing validation', () => {
+  it('should reject unknown strategy', () => {
+    assert.throws(
+      () => binPack1D([{ id: 'b', capacity: 10 }], [{ id: 'i', size: 5 }], { strategy: 'foo' as any }),
+      /Unsupported strategy/
+    );
+  });
+
+  it('should reject negative itemSpacing', () => {
+    assert.throws(
+      () => binPack1D([{ id: 'b', capacity: 10 }], [{ id: 'i', size: 5 }], { itemSpacing: -1 }),
+      /itemSpacing/
+    );
+  });
+
+  it('should allow unlimited bin quantity (Infinity)', () => {
+    const result = binPack1D([{ id: 'b', capacity: 10, quantity: Infinity }], [{ id: 'i', size: 6, quantity: 5 }]);
+    assert.strictEqual(result.summary.binsUsed, 5);
+  });
+});

@@ -13,6 +13,7 @@ from .types import (
 )
 from .optimizer1d import optimize_1d
 from .optimizer2d import optimize_2d
+from .validate import validate_1d, validate_2d
 from .binpacking import (
     BinDefinition,
     ItemDefinition,
@@ -31,6 +32,8 @@ __all__ = [
     "optimize",
     "optimize_1d",
     "optimize_2d",
+    "validate_1d",
+    "validate_2d",
     "bin_pack_1d",
     "BinDefinition",
     "ItemDefinition",
@@ -50,11 +53,23 @@ def optimize(data: Dict[str, Any]) -> OptimizationResult:
     Main optimization entry point. Dispatches to 1D or 2D optimizer based on 'dimension'.
     Accepts raw dictionary conforming to specification/schema.json.
     """
+    if not isinstance(data, dict):
+        raise ValueError("Invalid input: input must be an object")
+
     # Support wrapper like { "input": { ... } }
     input_data = data.get("input", data)
 
     dimension = input_data.get("dimension")
-    kerf = float(input_data.get("kerf", 0.0))
+    if dimension not in ("1D", "2D"):
+        raise ValueError(f"Invalid input: dimension must be \"1D\" or \"2D\" (got {dimension})")
+    kerf = input_data.get("kerf", 0.0)
+
+    for key in ("stocks", "parts"):
+        if not isinstance(input_data.get(key), list):
+            raise ValueError(f"Invalid input: {key} must be an array")
+        for i, entry in enumerate(input_data[key]):
+            if not isinstance(entry, dict):
+                raise ValueError(f"Invalid input: {key}[{i}] must be an object")
 
     min_rem_dict = input_data.get("min_remnant_size")
     min_remnant_size = None
@@ -68,8 +83,8 @@ def optimize(data: Dict[str, Any]) -> OptimizationResult:
     if dimension == "1D":
         stocks = [
             Stock1D(
-                id=s["id"],
-                length=float(s["length"]),
+                id=s.get("id"),
+                length=s.get("length"),
                 quantity=s.get("quantity", 1),
                 cost=s.get("cost"),
             )
@@ -77,8 +92,8 @@ def optimize(data: Dict[str, Any]) -> OptimizationResult:
         ]
         parts = [
             Part1D(
-                id=p["id"],
-                length=float(p["length"]),
+                id=p.get("id"),
+                length=p.get("length"),
                 name=p.get("name"),
                 quantity=p.get("quantity", 1),
             )
@@ -94,9 +109,9 @@ def optimize(data: Dict[str, Any]) -> OptimizationResult:
     elif dimension == "2D":
         stocks = [
             Stock2D(
-                id=s["id"],
-                width=float(s["width"]),
-                height=float(s["height"]),
+                id=s.get("id"),
+                width=s.get("width"),
+                height=s.get("height"),
                 quantity=s.get("quantity", 1),
                 cost=s.get("cost"),
                 grain=s.get("grain", "none"),
@@ -105,9 +120,9 @@ def optimize(data: Dict[str, Any]) -> OptimizationResult:
         ]
         parts = [
             Part2D(
-                id=p["id"],
-                width=float(p["width"]),
-                height=float(p["height"]),
+                id=p.get("id"),
+                width=p.get("width"),
+                height=p.get("height"),
                 name=p.get("name"),
                 quantity=p.get("quantity", 1),
                 can_rotate=p.get("can_rotate", True),
@@ -121,5 +136,5 @@ def optimize(data: Dict[str, Any]) -> OptimizationResult:
             kerf=kerf,
             min_remnant_size=min_remnant_size,
         )
-    else:
+    else:  # pragma: no cover - dimension is validated above
         raise ValueError(f"Unsupported dimension: {dimension}")

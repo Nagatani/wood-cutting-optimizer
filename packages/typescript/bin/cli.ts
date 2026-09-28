@@ -3,7 +3,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { optimize } from '../src/index.js';
-import { InputRequest } from '../src/types.js';
 
 function printHelp(): void {
   console.log(`
@@ -58,10 +57,8 @@ function main(): void {
     const content = fs.readFileSync(resolvedInputPath, 'utf-8');
     const inputJson = JSON.parse(content);
 
-    // Support both direct input or test case structure ({ input: ... })
-    const input: InputRequest = inputJson.input ? inputJson.input : inputJson;
-
-    const result = optimize(input);
+    // optimize() accepts both direct input and test case structure ({ input: ... })
+    const result = optimize(inputJson);
     const jsonOutput = JSON.stringify(result, null, 2);
 
     if (parsed.outputPath) {

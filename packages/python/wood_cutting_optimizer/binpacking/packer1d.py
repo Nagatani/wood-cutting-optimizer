@@ -1,4 +1,5 @@
 from __future__ import annotations
+import math
 from typing import List, Optional, TypeVar, Dict, Any
 from .types import (
     BinDefinition,
@@ -13,6 +14,39 @@ from .types import (
 
 TBin = TypeVar("TBin")
 TItem = TypeVar("TItem")
+
+# Tolerance for floating-point comparisons (e.g. 0.1 + 0.2 fitting into 0.3).
+EPS = 1e-9
+
+_STRATEGIES = ("best-fit-decreasing", "first-fit-decreasing", "worst-fit-decreasing")
+
+
+def _is_number(value: Any) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
+
+def _validate_bin_packing_input(
+    bins: List[BinDefinition],
+    items: List[ItemDefinition],
+    item_spacing: Any,
+    strategy: Any,
+) -> None:
+    if not _is_number(item_spacing) or item_spacing < 0:
+        raise ValueError(f"item_spacing must be a finite number >= 0 (got {item_spacing})")
+    if strategy not in _STRATEGIES:
+        raise ValueError(f"Unsupported strategy: {strategy}")
+    for b in bins:
+        if not _is_number(b.capacity) or b.capacity <= 0:
+            raise ValueError(f'Bin "{b.id}": capacity must be a finite number > 0 (got {b.capacity})')
+        q = b.quantity if b.quantity is not None else 1
+        if q != math.inf and (not isinstance(q, int) or isinstance(q, bool) or q < 0):
+            raise ValueError(f'Bin "{b.id}": quantity must be an integer >= 0 or math.inf (got {q})')
+    for it in items:
+        if not _is_number(it.size) or it.size <= 0:
+            raise ValueError(f'Item "{it.id}": size must be a finite number > 0 (got {it.size})')
+        q = it.quantity if it.quantity is not None else 1
+        if not isinstance(q, int) or isinstance(q, bool) or q < 0:
+            raise ValueError(f'Item "{it.id}": quantity must be an integer >= 0 (got {q})')
 
 
 class _ExpandedItem:
@@ -49,14 +83,16 @@ def bin_pack_1d(
     if options is None:
         options = BinPacking1DOptions()
 
-    item_spacing = max(0.0, float(options.item_spacing))
+    item_spacing = options.item_spacing
     strategy = options.strategy
+    _validate_bin_packing_input(bins, items, item_spacing, strategy)
+    item_spacing = float(item_spacing)
 
     # 1. Flatten items based on quantity
     expanded_items: List[_ExpandedItem] = []
     total_items_count = 0
     for item in items:
-        qty = max(0, item.quantity if item.quantity is not None else 1)
+        qty = item.quantity if item.quantity is not None else 1
         total_items_count += qty
         for _ in range(qty):
             expanded_items.append(_ExpandedItem(
@@ -93,7 +129,7 @@ def bin_pack_1d(
             for i, bin_obj in enumerate(active_bins):
                 additional_space = (item_spacing + item.size) if len(bin_obj.items) > 0 else item.size
                 space_left = bin_obj.capacity - bin_obj.used_offset
-                if space_left >= additional_space:
+                if space_left >= additional_space - EPS:
                     remaining = space_left - additional_space
                     if remaining < min_remaining_space:
                         min_remaining_space = remaining
@@ -102,7 +138,7 @@ def bin_pack_1d(
             for i, bin_obj in enumerate(active_bins):
                 additional_space = (item_spacing + item.size) if len(bin_obj.items) > 0 else item.size
                 space_left = bin_obj.capacity - bin_obj.used_offset
-                if space_left >= additional_space:
+                if space_left >= additional_space - EPS:
                     chosen_bin_index = i
                     break
         elif strategy == "worst-fit-decreasing":
@@ -110,7 +146,7 @@ def bin_pack_1d(
             for i, bin_obj in enumerate(active_bins):
                 additional_space = (item_spacing + item.size) if len(bin_obj.items) > 0 else item.size
                 space_left = bin_obj.capacity - bin_obj.used_offset
-                if space_left >= additional_space:
+                if space_left >= additional_space - EPS:
                     remaining = space_left - additional_space
                     if remaining > max_remaining_space:
                         max_remaining_space = remaining
@@ -132,7 +168,7 @@ def bin_pack_1d(
             min_waste = float("inf")
 
             for i, pool in enumerate(bin_pool):
-                if pool.remaining_quantity > 0 and pool.capacity >= item.size:
+                if pool.remaining_quantity > 0 and pool.capacity >= item.size - EPS:
                     waste = pool.capacity - item.size
                     if waste < min_waste:
                         min_waste = waste

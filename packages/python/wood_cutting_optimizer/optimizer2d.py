@@ -13,6 +13,10 @@ from .types import (
     UnplacedPart,
     GrainDirection,
 )
+from .validate import validate_2d
+
+# Tolerance for floating-point comparisons (e.g. 0.1 + 0.2 fitting into 0.3).
+EPS = 1e-9
 
 
 class FreeRect:
@@ -34,6 +38,7 @@ class ActiveStock2D:
         self.placements: List[Placement2D] = []
         self.cuts: List[Cut2D] = []
         self.cut_step_count: int = 0
+        self.cut_loss_area: float = 0.0  # Actual material removed by the blade
 
 
 class PlacementFit:
@@ -76,8 +81,8 @@ def find_best_fit(stock: ActiveStock2D, part: Dict[str, Any]) -> Optional[Placem
     for i, free in enumerate(stock.free_rects):
         # Try unrotated
         if (
-            pw <= free.width
-            and ph <= free.height
+            pw <= free.width + EPS
+            and ph <= free.height + EPS
             and is_orientation_allowed(stock_grain, part_grain, can_rotate, False)
         ):
             leftover_w = free.width - pw
@@ -95,8 +100,8 @@ def find_best_fit(stock: ActiveStock2D, part: Dict[str, Any]) -> Optional[Placem
 
         # Try rotated (90 degrees)
         if (
-            ph <= free.width
-            and pw <= free.height
+            ph <= free.width + EPS
+            and pw <= free.height + EPS
             and is_orientation_allowed(stock_grain, part_grain, can_rotate, True)
         ):
             leftover_w = free.width - ph
@@ -139,12 +144,18 @@ def place_part_in_stock(
 
     leftover_w = free.width - pw
     leftover_h = free.height - ph
+    has_leftover_w = leftover_w > EPS
+    has_leftover_h = leftover_h > EPS
 
     # Shorter Leftover Axis Split (SLAS)
     split_horizontal = leftover_w <= leftover_h
 
+    # Width/height of the free rects left after the blade passes (<= 0 when the kerf eats the leftover)
+    top_h = free.height - ph - kerf
+    right_w = free.width - pw - kerf
+
     if split_horizontal:
-        if leftover_h > 0:
+        if has_leftover_h:
             stock.cut_step_count += 1
             stock.cuts.append(Cut2D(
                 type="horizontal",
@@ -154,8 +165,9 @@ def place_part_in_stock(
                 kerf=kerf,
                 step=stock.cut_step_count,
             ))
+            stock.cut_loss_area += min(kerf, leftover_h) * free.width
 
-        if leftover_w > 0:
+        if has_leftover_w:
             stock.cut_step_count += 1
             stock.cuts.append(Cut2D(
                 type="vertical",
@@ -165,9 +177,9 @@ def place_part_in_stock(
                 kerf=kerf,
                 step=stock.cut_step_count,
             ))
+            stock.cut_loss_area += min(kerf, leftover_w) * ph
 
-        top_h = free.height - ph - (kerf if leftover_h > 0 else 0.0)
-        if top_h > 0:
+        if has_leftover_h and top_h > EPS:
             stock.free_rects.append(FreeRect(
                 x=px,
                 y=py + ph + kerf,
@@ -175,8 +187,7 @@ def place_part_in_stock(
                 height=top_h,
             ))
 
-        right_w = free.width - pw - (kerf if leftover_w > 0 else 0.0)
-        if right_w > 0:
+        if has_leftover_w and right_w > EPS:
             stock.free_rects.append(FreeRect(
                 x=px + pw + kerf,
                 y=py,
@@ -184,7 +195,7 @@ def place_part_in_stock(
                 height=ph,
             ))
     else:
-        if leftover_w > 0:
+        if has_leftover_w:
             stock.cut_step_count += 1
             stock.cuts.append(Cut2D(
                 type="vertical",
@@ -194,8 +205,9 @@ def place_part_in_stock(
                 kerf=kerf,
                 step=stock.cut_step_count,
             ))
+            stock.cut_loss_area += min(kerf, leftover_w) * free.height
 
-        if leftover_h > 0:
+        if has_leftover_h:
             stock.cut_step_count += 1
             stock.cuts.append(Cut2D(
                 type="horizontal",
@@ -205,9 +217,9 @@ def place_part_in_stock(
                 kerf=kerf,
                 step=stock.cut_step_count,
             ))
+            stock.cut_loss_area += min(kerf, leftover_h) * pw
 
-        right_w = free.width - pw - (kerf if leftover_w > 0 else 0.0)
-        if right_w > 0:
+        if has_leftover_w and right_w > EPS:
             stock.free_rects.append(FreeRect(
                 x=px + pw + kerf,
                 y=py,
@@ -215,8 +227,7 @@ def place_part_in_stock(
                 height=free.height,
             ))
 
-        top_h = free.height - ph - (kerf if leftover_h > 0 else 0.0)
-        if top_h > 0:
+        if has_leftover_h and top_h > EPS:
             stock.free_rects.append(FreeRect(
                 x=px,
                 y=py + ph + kerf,
@@ -231,7 +242,8 @@ def optimize_2d(
     kerf: float = 0.0,
     min_remnant_size: MinRemnantSize = None,
 ) -> OptimizationResult:
-    kerf = max(0.0, float(kerf))
+    validate_2d(stocks, parts, kerf, min_remnant_size)
+    kerf = float(kerf)
     min_remnant_width = float(min_remnant_size.width) if (min_remnant_size and min_remnant_size.width is not None) else 0.0
     min_remnant_height = float(min_remnant_size.height) if (min_remnant_size and min_remnant_size.height is not None) else 0.0
 
@@ -292,13 +304,13 @@ def optimize_2d(
             for p_idx, pool in enumerate(stock_pool):
                 if pool["remaining_quantity"] > 0:
                     can_fit_unrotated = (
-                        part["width"] <= pool["width"]
-                        and part["height"] <= pool["height"]
+                        part["width"] <= pool["width"] + EPS
+                        and part["height"] <= pool["height"] + EPS
                         and is_orientation_allowed(pool["grain"], part["grain"], part["can_rotate"], False)
                     )
                     can_fit_rotated = (
-                        part["height"] <= pool["width"]
-                        and part["width"] <= pool["height"]
+                        part["height"] <= pool["width"] + EPS
+                        and part["width"] <= pool["height"] + EPS
                         and is_orientation_allowed(pool["grain"], part["grain"], part["can_rotate"], True)
                     )
 
@@ -368,8 +380,8 @@ def optimize_2d(
                 waste.append(Rect2D(x=rect.x, y=rect.y, width=rect.width, height=rect.height))
                 total_waste_measure += area
 
-        cut_loss_area = sum(cut.kerf * cut.length for cut in stock.cuts)
-        total_waste_measure += cut_loss_area
+        # Cut loss area (kerf * length, or less when the leftover was thinner than the kerf)
+        total_waste_measure += stock.cut_loss_area
 
         result_stocks.append(StockResult2D(
             stock_id=stock.stock_id,

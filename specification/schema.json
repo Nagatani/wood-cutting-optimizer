@@ -111,6 +111,7 @@
     },
     "Cut1D": {
       "type": "object",
+      "description": "A cut at position x. A final cut is emitted after the last part when leftover material remains; the leftover (remnant/waste) starts after the kerf.",
       "required": ["x", "kerf", "step"],
       "properties": {
         "x": { "type": "number" },

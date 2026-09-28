@@ -10,9 +10,13 @@ import {
   UnplacedPart,
 } from './types.js';
 import { binPack1D, BinDefinition, ItemDefinition } from './binpacking/index.js';
+import { validateInput } from './validate.js';
+
+const EPS = 1e-9;
 
 export function optimize1D(input: InputRequest): OptimizationResult {
-  const kerf = Math.max(0, input.kerf ?? 0);
+  validateInput(input);
+  const kerf = input.kerf ?? 0;
   const minRemnantLength = input.min_remnant_size?.length ?? 0;
 
   const bins: BinDefinition<Stock1D>[] = (input.stocks as Stock1D[]).map((s) => ({
@@ -66,28 +70,41 @@ export function optimize1D(input: InputRequest): OptimizationResult {
 
     totalPlacedCount += placements.length;
 
+    // Cut loss between parts
+    let cutLoss = cuts.length * kerf;
+
     const remaining = packedBin.remainingCapacity;
     const remnants: Segment1D[] = [];
     const waste: Segment1D[] = [];
 
-    if (remaining > 0) {
-      if (minRemnantLength > 0 && remaining >= minRemnantLength) {
-        remnants.push({
-          x: packedBin.usedCapacity,
-          length: remaining,
-        });
-        totalRemnantMeasure += remaining;
-      } else {
-        waste.push({
-          x: packedBin.usedCapacity,
-          length: remaining,
-        });
-        totalWasteMeasure += remaining;
+    if (remaining > EPS) {
+      // A final cut separates the last part from the leftover.
+      // If the leftover is thinner than the kerf, the blade consumes all of it.
+      const endCutLoss = Math.min(kerf, remaining);
+      cuts.push({
+        x: packedBin.usedCapacity,
+        kerf: kerf,
+        step: cuts.length + 1,
+      });
+      cutLoss += endCutLoss;
+
+      const leftover = Number((remaining - endCutLoss).toFixed(6));
+      if (leftover > EPS) {
+        const segment: Segment1D = {
+          x: packedBin.usedCapacity + endCutLoss,
+          length: leftover,
+        };
+        if (minRemnantLength > 0 && leftover >= minRemnantLength) {
+          remnants.push(segment);
+          totalRemnantMeasure += leftover;
+        } else {
+          waste.push(segment);
+          totalWasteMeasure += leftover;
+        }
       }
     }
 
     // Cut loss is also considered waste
-    const cutLoss = cuts.length * kerf;
     totalWasteMeasure += cutLoss;
 
     resultStocks.push({

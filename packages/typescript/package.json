@@ -18,6 +18,10 @@
     "wood-cutting-optimizer": "./dist/bin/cli.js",
     "wood-opt": "./dist/bin/cli.js"
   },
+  "files": [
+    "dist/src",
+    "dist/bin"
+  ],
   "scripts": {
     "build": "tsc",
     "clean": "node -e \"fs.rmSync('dist',{recursive:true,force:true})\"",
@@ -28,5 +32,8 @@
   "devDependencies": {
     "@types/node": "^22.10.0",
     "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }
