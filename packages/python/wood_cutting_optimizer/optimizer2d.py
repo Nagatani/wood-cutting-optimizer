@@ -14,9 +14,35 @@ from .types import (
     GrainDirection,
 )
 from .validate import validate_2d
+from .evaluation import SolutionEvaluation, is_better_evaluation
 
 # Tolerance for floating-point comparisons (e.g. 0.1 + 0.2 fitting into 0.3).
 EPS = 1e-9
+
+# Order in which parts are placed (all descending).
+SORT_RULES = ("area", "long-side", "short-side", "perimeter")
+# How to score a free rectangle for a part (lower is better).
+FIT_RULES = ("best-short-side", "best-long-side", "best-area")
+# Which guillotine cut to make first after placing a part.
+SPLIT_RULES = ("shorter-leftover-axis", "longer-leftover-axis", "min-area", "max-area")
+# Which stock to open when a part fits in no open stock.
+STOCK_RULES = ("smallest", "largest", "lowest-cost-ratio")
+
+# All heuristic combinations tried by optimize_2d as (sort, fit, split, stock).
+# The first entry is the baseline (area / BSSF / SLAS / smallest stock); later entries
+# only replace it when they produce a strictly better solution.
+HEURISTICS_2D: List[Tuple[str, str, str, str]] = [
+    (sort, fit, split, stock)
+    for sort in SORT_RULES
+    for fit in FIT_RULES
+    for split in SPLIT_RULES
+    for stock in STOCK_RULES
+]
+
+# Above this many part pieces, only the first REDUCED_HEURISTIC_COUNT heuristics
+# (the baseline sort order) are tried to keep runtime bounded.
+LARGE_INPUT_PIECES = 500
+REDUCED_HEURISTIC_COUNT = len(FIT_RULES) * len(SPLIT_RULES) * len(STOCK_RULES)
 
 
 class FreeRect:
@@ -28,12 +54,13 @@ class FreeRect:
 
 
 class ActiveStock2D:
-    def __init__(self, stock_id: str, index: int, width: float, height: float, grain: GrainDirection):
+    def __init__(self, stock_id: str, index: int, width: float, height: float, grain: GrainDirection, cost: float):
         self.stock_id = stock_id
         self.index = index
         self.width = width
         self.height = height
         self.grain = grain
+        self.cost = cost
         self.free_rects: List[FreeRect] = [FreeRect(0.0, 0.0, width, height)]
         self.placements: List[Placement2D] = []
         self.cuts: List[Cut2D] = []
@@ -47,7 +74,7 @@ class PlacementFit:
         self.rotated = rotated
         self.part_width = part_width
         self.part_height = part_height
-        self.score = score
+        self.score = score  # Lower is better (depends on the fit rule)
 
 
 def is_orientation_allowed(
@@ -68,56 +95,73 @@ def is_orientation_allowed(
         return rotated
 
 
-def find_best_fit(stock: ActiveStock2D, part: Dict[str, Any]) -> Optional[PlacementFit]:
+def _sort_keys(part: Dict[str, Any], rule: str) -> Tuple[float, float]:
+    """Returns the (primary, secondary) sort keys of a part (sorted descending)."""
+    long_side = max(part["width"], part["height"])
+    short_side = min(part["width"], part["height"])
+    if rule == "area":
+        return (part["area"], long_side)
+    if rule == "long-side":
+        return (long_side, short_side)
+    if rule == "short-side":
+        return (short_side, long_side)
+    return (part["width"] + part["height"], long_side)  # perimeter
+
+
+def _fit_score(free: FreeRect, pw: float, ph: float, rule: str) -> float:
+    leftover_w = free.width - pw
+    leftover_h = free.height - ph
+    if rule == "best-short-side":
+        return min(leftover_w, leftover_h)
+    if rule == "best-long-side":
+        return max(leftover_w, leftover_h)
+    return free.width * free.height - pw * ph  # best-area
+
+
+def find_best_fit(stock: ActiveStock2D, part: Dict[str, Any], rule: str = "best-short-side") -> Optional[PlacementFit]:
+    """Finds the best free rectangle in the stock for the part (lowest score wins)."""
     best_fit: Optional[PlacementFit] = None
     min_score = float("inf")
 
-    pw = part["width"]
-    ph = part["height"]
-    can_rotate = part["can_rotate"]
-    part_grain = part["grain"]
-    stock_grain = stock.grain
+    orientations = (
+        (False, part["width"], part["height"]),
+        (True, part["height"], part["width"]),
+    )
 
     for i, free in enumerate(stock.free_rects):
-        # Try unrotated
-        if (
-            pw <= free.width + EPS
-            and ph <= free.height + EPS
-            and is_orientation_allowed(stock_grain, part_grain, can_rotate, False)
-        ):
-            leftover_w = free.width - pw
-            leftover_h = free.height - ph
-            score = min(leftover_w, leftover_h)
-            if score < min_score:
-                min_score = score
-                best_fit = PlacementFit(
-                    rect_index=i,
-                    rotated=False,
-                    part_width=pw,
-                    part_height=ph,
-                    score=score,
-                )
-
-        # Try rotated (90 degrees)
-        if (
-            ph <= free.width + EPS
-            and pw <= free.height + EPS
-            and is_orientation_allowed(stock_grain, part_grain, can_rotate, True)
-        ):
-            leftover_w = free.width - ph
-            leftover_h = free.height - pw
-            score = min(leftover_w, leftover_h)
-            if score < min_score:
-                min_score = score
-                best_fit = PlacementFit(
-                    rect_index=i,
-                    rotated=True,
-                    part_width=ph,
-                    part_height=pw,
-                    score=score,
-                )
+        # Try unrotated, then rotated (90 degrees)
+        for rotated, pw, ph in orientations:
+            if (
+                pw <= free.width + EPS
+                and ph <= free.height + EPS
+                and is_orientation_allowed(stock.grain, part["grain"], part["can_rotate"], rotated)
+            ):
+                score = _fit_score(free, pw, ph, rule)
+                if score < min_score:
+                    min_score = score
+                    best_fit = PlacementFit(
+                        rect_index=i,
+                        rotated=rotated,
+                        part_width=pw,
+                        part_height=ph,
+                        score=score,
+                    )
 
     return best_fit
+
+
+def _should_split_horizontal(pw: float, ph: float, leftover_w: float, leftover_h: float, rule: str) -> bool:
+    """Decides whether the full-length cut runs horizontally (True) or vertically (False)."""
+    if rule == "shorter-leftover-axis":
+        # Split along the axis that leaves the smaller remnant, maximizing the size of the other remnant.
+        return leftover_w <= leftover_h
+    if rule == "longer-leftover-axis":
+        return leftover_w > leftover_h
+    if rule == "min-area":
+        # Makes the smaller of the two new free rects as small as possible
+        return pw * leftover_h > ph * leftover_w
+    # max-area: keeps the two new free rects as balanced as possible
+    return pw * leftover_h <= ph * leftover_w
 
 
 def place_part_in_stock(
@@ -125,6 +169,7 @@ def place_part_in_stock(
     part: Dict[str, Any],
     fit: PlacementFit,
     kerf: float,
+    split_rule: str = "shorter-leftover-axis",
 ) -> None:
     free = stock.free_rects.pop(fit.rect_index)
 
@@ -147,8 +192,7 @@ def place_part_in_stock(
     has_leftover_w = leftover_w > EPS
     has_leftover_h = leftover_h > EPS
 
-    # Shorter Leftover Axis Split (SLAS)
-    split_horizontal = leftover_w <= leftover_h
+    split_horizontal = _should_split_horizontal(pw, ph, leftover_w, leftover_h, split_rule)
 
     # Width/height of the free rects left after the blade passes (<= 0 when the kerf eats the leftover)
     top_h = free.height - ph - kerf
@@ -236,38 +280,60 @@ def place_part_in_stock(
             ))
 
 
-def optimize_2d(
+def _choose_stock(stock_pool: List[Dict[str, Any]], part: Dict[str, Any], rule: str) -> int:
+    """
+    Chooses which stock type to open for a part that fits in no open stock.
+    Returns -1 when no remaining stock can hold the part.
+    """
+    chosen_pool_idx = -1
+    best_key = float("inf")
+    best_area = float("inf")
+
+    for p_idx, pool in enumerate(stock_pool):
+        if pool["remaining_quantity"] <= 0:
+            continue
+
+        can_fit_unrotated = (
+            part["width"] <= pool["width"] + EPS
+            and part["height"] <= pool["height"] + EPS
+            and is_orientation_allowed(pool["grain"], part["grain"], part["can_rotate"], False)
+        )
+        can_fit_rotated = (
+            part["height"] <= pool["width"] + EPS
+            and part["width"] <= pool["height"] + EPS
+            and is_orientation_allowed(pool["grain"], part["grain"], part["can_rotate"], True)
+        )
+        if not can_fit_unrotated and not can_fit_rotated:
+            continue
+
+        area = pool["width"] * pool["height"]
+        if rule == "smallest":
+            key = area
+        elif rule == "largest":
+            key = -area
+        else:  # lowest-cost-ratio
+            key = pool["cost"] / area
+
+        # Ties are broken by the smaller area, then by input order
+        if key < best_key - EPS or (abs(key - best_key) <= EPS and area < best_area):
+            best_key = key
+            best_area = area
+            chosen_pool_idx = p_idx
+
+    return chosen_pool_idx
+
+
+def _run_heuristic(
     stocks: List[Stock2D],
-    parts: List[Part2D],
-    kerf: float = 0.0,
-    min_remnant_size: MinRemnantSize = None,
-) -> OptimizationResult:
-    validate_2d(stocks, parts, kerf, min_remnant_size)
-    kerf = float(kerf)
-    min_remnant_width = float(min_remnant_size.width) if (min_remnant_size and min_remnant_size.width is not None) else 0.0
-    min_remnant_height = float(min_remnant_size.height) if (min_remnant_size and min_remnant_size.height is not None) else 0.0
+    parts: List[Dict[str, Any]],
+    kerf: float,
+    heuristic: Tuple[str, str, str, str],
+) -> Tuple[List[ActiveStock2D], Dict[str, int]]:
+    """Runs one greedy packing pass with the given heuristic."""
+    sort_rule, fit_rule, split_rule, stock_rule = heuristic
 
-    expanded_parts: List[Dict[str, Any]] = []
-    total_parts_count = 0
-    for p in parts:
-        qty = p.quantity if p.quantity is not None else 1
-        total_parts_count += qty
-        for _ in range(qty):
-            expanded_parts.append({
-                "part_id": p.id,
-                "name": p.name,
-                "width": float(p.width),
-                "height": float(p.height),
-                "can_rotate": p.can_rotate if p.can_rotate is not None else True,
-                "grain": p.grain or "none",
-                "area": float(p.width) * float(p.height),
-            })
-
-    # Sort descending by Area, then max dimension
-    expanded_parts.sort(
-        key=lambda x: (x["area"], max(x["width"], x["height"])),
-        reverse=True,
-    )
+    # Sort parts descending by the heuristic's keys (stable, so ties keep input order)
+    sorted_parts = sorted(parts, key=lambda p: _sort_keys(p, sort_rule), reverse=True)
 
     stock_pool = []
     for s in stocks:
@@ -284,76 +350,74 @@ def optimize_2d(
     unplaced_parts_map: Dict[str, int] = {}
     global_stock_index = 0
 
-    for part in expanded_parts:
+    for part in sorted_parts:
         best_stock_idx = -1
         best_fit: Optional[PlacementFit] = None
 
         for s_idx, stock in enumerate(active_stocks):
-            fit = find_best_fit(stock, part)
+            fit = find_best_fit(stock, part, fit_rule)
             if fit is not None:
                 if best_fit is None or fit.score < best_fit.score:
                     best_fit = fit
                     best_stock_idx = s_idx
 
         if best_stock_idx != -1 and best_fit is not None:
-            place_part_in_stock(active_stocks[best_stock_idx], part, best_fit, kerf)
+            place_part_in_stock(active_stocks[best_stock_idx], part, best_fit, kerf, split_rule)
+            continue
+
+        chosen_pool_idx = _choose_stock(stock_pool, part, stock_rule)
+        if chosen_pool_idx == -1:
+            unplaced_parts_map[part["part_id"]] = unplaced_parts_map.get(part["part_id"], 0) + 1
+            continue
+
+        chosen = stock_pool[chosen_pool_idx]
+        chosen["remaining_quantity"] -= 1
+
+        new_stock = ActiveStock2D(
+            stock_id=chosen["id"],
+            index=global_stock_index,
+            width=chosen["width"],
+            height=chosen["height"],
+            grain=chosen["grain"],
+            cost=chosen["cost"],
+        )
+        global_stock_index += 1
+
+        fit = find_best_fit(new_stock, part, fit_rule)
+        if fit is not None:
+            place_part_in_stock(new_stock, part, fit, kerf, split_rule)
+            active_stocks.append(new_stock)
         else:
-            chosen_pool_idx = -1
-            min_stock_area = float("inf")
+            # This should not happen since we checked feasibility, but fallback
+            chosen["remaining_quantity"] += 1
+            global_stock_index -= 1
+            unplaced_parts_map[part["part_id"]] = unplaced_parts_map.get(part["part_id"], 0) + 1
 
-            for p_idx, pool in enumerate(stock_pool):
-                if pool["remaining_quantity"] > 0:
-                    can_fit_unrotated = (
-                        part["width"] <= pool["width"] + EPS
-                        and part["height"] <= pool["height"] + EPS
-                        and is_orientation_allowed(pool["grain"], part["grain"], part["can_rotate"], False)
-                    )
-                    can_fit_rotated = (
-                        part["height"] <= pool["width"] + EPS
-                        and part["width"] <= pool["height"] + EPS
-                        and is_orientation_allowed(pool["grain"], part["grain"], part["can_rotate"], True)
-                    )
+    return active_stocks, unplaced_parts_map
 
-                    if can_fit_unrotated or can_fit_rotated:
-                        area = pool["width"] * pool["height"]
-                        if area < min_stock_area:
-                            min_stock_area = area
-                            chosen_pool_idx = p_idx
 
-            if chosen_pool_idx != -1:
-                chosen = stock_pool[chosen_pool_idx]
-                chosen["remaining_quantity"] -= 1
-
-                new_stock = ActiveStock2D(
-                    stock_id=chosen["id"],
-                    index=global_stock_index,
-                    width=chosen["width"],
-                    height=chosen["height"],
-                    grain=chosen["grain"],
-                )
-                global_stock_index += 1
-
-                fit = find_best_fit(new_stock, part)
-                if fit is not None:
-                    place_part_in_stock(new_stock, part, fit, kerf)
-                    active_stocks.append(new_stock)
-                else:
-                    chosen["remaining_quantity"] += 1
-                    unplaced_parts_map[part["part_id"]] = unplaced_parts_map.get(part["part_id"], 0) + 1
-            else:
-                unplaced_parts_map[part["part_id"]] = unplaced_parts_map.get(part["part_id"], 0) + 1
-
-    # Summarize results
+def _build_result(
+    active_stocks: List[ActiveStock2D],
+    unplaced_parts_map: Dict[str, int],
+    total_parts_count: int,
+    min_remnant_width: float,
+    min_remnant_height: float,
+) -> Tuple[OptimizationResult, SolutionEvaluation]:
+    """Builds the output result and its evaluation from a finished packing pass."""
     result_stocks: List[StockResult2D] = []
     total_stock_measure = 0.0
     total_used_measure = 0.0
     total_waste_measure = 0.0
     total_remnant_measure = 0.0
     total_placed_count = 0
+    total_cost = 0.0
+    cut_count = 0
 
     for stock in active_stocks:
         stock_area = stock.width * stock.height
         total_stock_measure += stock_area
+        total_cost += stock.cost
+        cut_count += len(stock.cuts)
 
         stock_parts_area = sum(p.width * p.height for p in stock.placements)
         total_used_measure += stock_parts_area
@@ -398,10 +462,11 @@ def optimize_2d(
         UnplacedPart(part_id=pid, quantity=qty)
         for pid, qty in unplaced_parts_map.items()
     ]
+    unplaced_count = sum(unplaced_parts_map.values())
 
     yield_rate = (total_used_measure / total_stock_measure) if total_stock_measure > 0 else 0.0
 
-    return OptimizationResult(
+    result = OptimizationResult(
         dimension="2D",
         summary=Summary(
             stock_count_used=len(result_stocks),
@@ -416,3 +481,62 @@ def optimize_2d(
         stocks=result_stocks,
         unplaced_parts=unplaced_parts,
     )
+    evaluation = SolutionEvaluation(
+        unplaced_count=unplaced_count,
+        total_cost=total_cost,
+        stock_count=len(result_stocks),
+        remnant_measure=total_remnant_measure,
+        cut_count=cut_count,
+    )
+    return result, evaluation
+
+
+def optimize_2d(
+    stocks: List[Stock2D],
+    parts: List[Part2D],
+    kerf: float = 0.0,
+    min_remnant_size: MinRemnantSize = None,
+) -> OptimizationResult:
+    """
+    2D Guillotine Bin Packing Optimizer with Kerf, Grain, and Remnant constraints.
+    Runs several greedy heuristics and returns the best solution (see evaluation.py).
+    """
+    validate_2d(stocks, parts, kerf, min_remnant_size)
+    kerf = float(kerf)
+    min_remnant_width = float(min_remnant_size.width) if (min_remnant_size and min_remnant_size.width is not None) else 0.0
+    min_remnant_height = float(min_remnant_size.height) if (min_remnant_size and min_remnant_size.height is not None) else 0.0
+
+    expanded_parts: List[Dict[str, Any]] = []
+    for p in parts:
+        qty = p.quantity if p.quantity is not None else 1
+        for _ in range(qty):
+            expanded_parts.append({
+                "part_id": p.id,
+                "name": p.name,
+                "width": float(p.width),
+                "height": float(p.height),
+                "can_rotate": p.can_rotate if p.can_rotate is not None else True,
+                "grain": p.grain or "none",
+                "area": float(p.width) * float(p.height),
+            })
+
+    heuristics = (
+        HEURISTICS_2D[:REDUCED_HEURISTIC_COUNT]
+        if len(expanded_parts) > LARGE_INPUT_PIECES
+        else HEURISTICS_2D
+    )
+
+    best: Optional[Tuple[OptimizationResult, SolutionEvaluation]] = None
+    for heuristic in heuristics:
+        active_stocks, unplaced_parts_map = _run_heuristic(stocks, expanded_parts, kerf, heuristic)
+        candidate = _build_result(
+            active_stocks,
+            unplaced_parts_map,
+            len(expanded_parts),
+            min_remnant_width,
+            min_remnant_height,
+        )
+        if best is None or is_better_evaluation(candidate[1], best[1]):
+            best = candidate
+
+    return best[0]

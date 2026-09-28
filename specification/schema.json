@@ -27,7 +27,7 @@
         "id": { "type": "string" },
         "length": { "type": "number", "exclusiveMinimum": 0 },
         "quantity": { "type": "integer", "minimum": 1, "default": 1 },
-        "cost": { "type": "number", "minimum": 0 }
+        "cost": { "type": "number", "minimum": 0, "description": "Price of one stock. The optimizer minimizes the total cost of used stocks; defaults to the stock area (2D) or length (1D)." }
       },
       "additionalProperties": false
     },
@@ -50,7 +50,7 @@
         "width": { "type": "number", "exclusiveMinimum": 0 },
         "height": { "type": "number", "exclusiveMinimum": 0 },
         "quantity": { "type": "integer", "minimum": 1, "default": 1 },
-        "cost": { "type": "number", "minimum": 0 },
+        "cost": { "type": "number", "minimum": 0, "description": "Price of one stock. The optimizer minimizes the total cost of used stocks; defaults to the stock area (2D) or length (1D)." },
         "grain": { "$ref": "#/definitions/GrainDirection" }
       },
       "additionalProperties": false

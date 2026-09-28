@@ -1,0 +1,20 @@
+{
+  "name": "1D Cost-Aware Stock Selection",
+  "description": "A longer stock with a lower cost per length should be preferred over two shorter stocks",
+  "input": {
+    "dimension": "1D",
+    "kerf": 0.0,
+    "stocks": [
+      { "id": "short-1820", "length": 1820.0, "quantity": 10, "cost": 400 },
+      { "id": "long-3650", "length": 3650.0, "quantity": 10, "cost": 600 }
+    ],
+    "parts": [
+      { "id": "rail", "name": "Rail", "length": 900.0, "quantity": 4 }
+    ]
+  },
+  "expected": {
+    "all_placed": true,
+    "stock_ids": ["long-3650"],
+    "total_cost": 600
+  }
+}

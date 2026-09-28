@@ -9,22 +9,45 @@ import {
   Segment1D,
   UnplacedPart,
 } from './types.js';
-import { binPack1D, BinDefinition, ItemDefinition } from './binpacking/index.js';
+import {
+  binPack1D,
+  BinDefinition,
+  ItemDefinition,
+  BinPacking1DResult,
+  BinSelection1D,
+  PackingStrategy1D,
+} from './binpacking/index.js';
 import { validateInput } from './validate.js';
+import { isBetterEvaluation, SolutionEvaluation } from './evaluation.js';
 
 const EPS = 1e-9;
+
+/**
+ * Heuristic combinations tried by optimize1D. The first entry is the baseline
+ * (best-fit-decreasing / smallest stock); later entries only replace it when strictly better.
+ */
+const STRATEGIES: PackingStrategy1D[] = ['best-fit-decreasing', 'first-fit-decreasing', 'worst-fit-decreasing'];
+const BIN_SELECTIONS: BinSelection1D[] = ['smallest', 'largest', 'lowest-cost-ratio'];
+
+interface UsedStock1D {
+  stockIndex: number; // Index into input.stocks
+  index: number;
+  items: { id: string; size: number; offset: number }[];
+  usedCapacity: number; // End offset of the last item
+}
 
 export function optimize1D(input: InputRequest): OptimizationResult {
   validateInput(input);
   const kerf = input.kerf ?? 0;
   const minRemnantLength = input.min_remnant_size?.length ?? 0;
+  const stocks = input.stocks as Stock1D[];
 
-  const bins: BinDefinition<Stock1D>[] = (input.stocks as Stock1D[]).map((s) => ({
+  const bins: BinDefinition<number>[] = stocks.map((s, i) => ({
     id: s.id,
     capacity: s.length,
     quantity: s.quantity ?? 1,
-    cost: s.cost ?? s.length,
-    data: s,
+    cost: stockCost(s),
+    data: i,
   }));
 
   const items: ItemDefinition<Part1D>[] = (input.parts as Part1D[]).map((p) => ({
@@ -34,25 +57,92 @@ export function optimize1D(input: InputRequest): OptimizationResult {
     data: p,
   }));
 
-  const packResult = binPack1D(bins, items, {
-    itemSpacing: kerf,
-    strategy: 'best-fit-decreasing',
+  let best: { result: OptimizationResult; evaluation: SolutionEvaluation } | null = null;
+  for (const strategy of STRATEGIES) {
+    for (const binSelection of BIN_SELECTIONS) {
+      const packResult = binPack1D(bins, items, { itemSpacing: kerf, strategy, binSelection });
+      const usedStocks = downsizeStocks(stocks, packResult);
+      const candidate = buildResult(stocks, usedStocks, packResult, kerf, minRemnantLength);
+      if (best === null || isBetterEvaluation(candidate.evaluation, best.evaluation)) {
+        best = candidate;
+      }
+    }
+  }
+
+  return best!.result;
+}
+
+function stockCost(stock: Stock1D): number {
+  return stock.cost ?? stock.length;
+}
+
+/**
+ * Swaps each used stock for the cheapest remaining stock type that still holds its parts
+ * (e.g. a 3m stock holding 1.5m of parts becomes a 2m stock when one is available and cheaper).
+ */
+function downsizeStocks(stocks: Stock1D[], packResult: BinPacking1DResult<number, Part1D>): UsedStock1D[] {
+  const remaining = stocks.map((s) => s.quantity ?? 1);
+  const usedStocks: UsedStock1D[] = packResult.bins.map((bin) => {
+    const stockIndex = bin.data as number;
+    remaining[stockIndex] -= 1;
+    return {
+      stockIndex,
+      index: bin.index,
+      items: bin.items.map((it) => ({ id: it.id, size: it.size, offset: it.offset })),
+      usedCapacity: bin.usedCapacity,
+    };
   });
 
+  for (const used of usedStocks) {
+    let bestIndex = used.stockIndex;
+    for (let j = 0; j < stocks.length; j++) {
+      if (j === used.stockIndex || remaining[j] <= 0) continue;
+      if (stocks[j].length < used.usedCapacity - EPS) continue;
+      const cost = stockCost(stocks[j]);
+      const bestCost = stockCost(stocks[bestIndex]);
+      if (
+        cost < bestCost - EPS ||
+        (Math.abs(cost - bestCost) <= EPS && stocks[j].length < stocks[bestIndex].length)
+      ) {
+        bestIndex = j;
+      }
+    }
+    if (bestIndex !== used.stockIndex) {
+      remaining[used.stockIndex] += 1;
+      remaining[bestIndex] -= 1;
+      used.stockIndex = bestIndex;
+    }
+  }
+
+  return usedStocks;
+}
+
+function buildResult(
+  stocks: Stock1D[],
+  usedStocks: UsedStock1D[],
+  packResult: BinPacking1DResult<number, Part1D>,
+  kerf: number,
+  minRemnantLength: number
+): { result: OptimizationResult; evaluation: SolutionEvaluation } {
   const resultStocks: StockResult1D[] = [];
   let totalStockMeasure = 0;
   let totalUsedMeasure = 0;
   let totalWasteMeasure = 0;
   let totalRemnantMeasure = 0;
   let totalPlacedCount = 0;
+  let totalCost = 0;
+  let cutCount = 0;
 
-  for (const packedBin of packResult.bins) {
-    totalStockMeasure += packedBin.capacity;
+  for (const used of usedStocks) {
+    const stock = stocks[used.stockIndex];
+    const capacity = stock.length;
+    totalStockMeasure += capacity;
+    totalCost += stockCost(stock);
     const placements: Placement1D[] = [];
     const cuts: Cut1D[] = [];
 
-    for (let i = 0; i < packedBin.items.length; i++) {
-      const item = packedBin.items[i];
+    for (let i = 0; i < used.items.length; i++) {
+      const item = used.items[i];
       if (i > 0) {
         cuts.push({
           x: item.offset - kerf,
@@ -73,7 +163,7 @@ export function optimize1D(input: InputRequest): OptimizationResult {
     // Cut loss between parts
     let cutLoss = cuts.length * kerf;
 
-    const remaining = packedBin.remainingCapacity;
+    const remaining = Number(Math.max(0, capacity - used.usedCapacity).toFixed(6));
     const remnants: Segment1D[] = [];
     const waste: Segment1D[] = [];
 
@@ -82,7 +172,7 @@ export function optimize1D(input: InputRequest): OptimizationResult {
       // If the leftover is thinner than the kerf, the blade consumes all of it.
       const endCutLoss = Math.min(kerf, remaining);
       cuts.push({
-        x: packedBin.usedCapacity,
+        x: used.usedCapacity,
         kerf: kerf,
         step: cuts.length + 1,
       });
@@ -91,7 +181,7 @@ export function optimize1D(input: InputRequest): OptimizationResult {
       const leftover = Number((remaining - endCutLoss).toFixed(6));
       if (leftover > EPS) {
         const segment: Segment1D = {
-          x: packedBin.usedCapacity + endCutLoss,
+          x: used.usedCapacity + endCutLoss,
           length: leftover,
         };
         if (minRemnantLength > 0 && leftover >= minRemnantLength) {
@@ -106,11 +196,12 @@ export function optimize1D(input: InputRequest): OptimizationResult {
 
     // Cut loss is also considered waste
     totalWasteMeasure += cutLoss;
+    cutCount += cuts.length;
 
     resultStocks.push({
-      stock_id: packedBin.binId,
-      index: packedBin.index,
-      length: packedBin.capacity,
+      stock_id: stock.id,
+      index: used.index,
+      length: capacity,
       placements,
       cuts,
       remnants,
@@ -118,14 +209,18 @@ export function optimize1D(input: InputRequest): OptimizationResult {
     });
   }
 
-  const unplaced_parts: UnplacedPart[] = packResult.unpackedItems.map((u) => ({
-    part_id: u.id,
-    quantity: u.quantity,
-  }));
+  let unplacedCount = 0;
+  const unplaced_parts: UnplacedPart[] = packResult.unpackedItems.map((u) => {
+    unplacedCount += u.quantity;
+    return {
+      part_id: u.id,
+      quantity: u.quantity,
+    };
+  });
 
   const yieldRate = totalStockMeasure > 0 ? totalUsedMeasure / totalStockMeasure : 0;
 
-  return {
+  const result: OptimizationResult = {
     dimension: '1D',
     summary: {
       stock_count_used: resultStocks.length,
@@ -140,5 +235,15 @@ export function optimize1D(input: InputRequest): OptimizationResult {
     stocks: resultStocks,
     unplaced_parts,
   };
-}
 
+  return {
+    result,
+    evaluation: {
+      unplacedCount,
+      totalCost,
+      stockCount: resultStocks.length,
+      remnantMeasure: totalRemnantMeasure,
+      cutCount,
+    },
+  };
+}

@@ -95,6 +95,23 @@ describe('2D cutting', () => {
   });
 });
 
+describe('Cost-aware stock selection', () => {
+  for (const file of ['1d_cost_aware.json', '2d_cost_aware.json']) {
+    it(`should choose the cheapest stock combination (${file})`, () => {
+      const caseData = JSON.parse(fs.readFileSync(path.join(testCasesDir, file), 'utf-8'));
+      const result = optimize(caseData.input);
+      const costs = new Map<string, number>(caseData.input.stocks.map((s: any) => [s.id, s.cost]));
+      assert.strictEqual(result.unplaced_parts.length, 0);
+      assert.deepStrictEqual(
+        result.stocks.map((s) => s.stock_id),
+        caseData.expected.stock_ids
+      );
+      const totalCost = result.stocks.reduce((sum, s) => sum + costs.get(s.stock_id)!, 0);
+      assert.strictEqual(totalCost, caseData.expected.total_cost);
+    });
+  }
+});
+
 describe('Input handling', () => {
   const valid: InputRequest = {
     dimension: '1D',

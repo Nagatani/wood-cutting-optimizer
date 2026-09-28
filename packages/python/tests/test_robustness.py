@@ -88,6 +88,19 @@ class TestCutting2D(unittest.TestCase):
         self.assertEqual(len(result.unplaced_parts), 0)
 
 
+class TestCostAwareSelection(unittest.TestCase):
+    def test_cheapest_stock_combination(self):
+        for name in ("1d_cost_aware.json", "2d_cost_aware.json"):
+            with self.subTest(case=name):
+                with open(TEST_CASES_DIR / name, "r", encoding="utf-8") as f:
+                    case_data = json.load(f)
+                result = optimize(case_data["input"])
+                costs = {s["id"]: s["cost"] for s in case_data["input"]["stocks"]}
+                self.assertEqual(len(result.unplaced_parts), 0)
+                self.assertEqual([s.stock_id for s in result.stocks], case_data["expected"]["stock_ids"])
+                self.assertEqual(sum(costs[s.stock_id] for s in result.stocks), case_data["expected"]["total_cost"])
+
+
 class TestInputHandling(unittest.TestCase):
     VALID = {
         "dimension": "1D",

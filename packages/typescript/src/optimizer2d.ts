@@ -11,9 +11,54 @@ import {
   GrainDirection,
 } from './types.js';
 import { validateInput } from './validate.js';
+import { isBetterEvaluation, SolutionEvaluation } from './evaluation.js';
 
 /** Tolerance for floating-point comparisons (e.g. 0.1 + 0.2 fitting into 0.3). */
 const EPS = 1e-9;
+
+/** Order in which parts are placed (all descending). */
+type SortRule2D = 'area' | 'long-side' | 'short-side' | 'perimeter';
+/** How to score a free rectangle for a part (lower is better). */
+type FitRule2D = 'best-short-side' | 'best-long-side' | 'best-area';
+/** Which guillotine cut to make first after placing a part. */
+type SplitRule2D = 'shorter-leftover-axis' | 'longer-leftover-axis' | 'min-area' | 'max-area';
+/** Which stock to open when a part fits in no open stock. */
+type StockRule2D = 'smallest' | 'largest' | 'lowest-cost-ratio';
+
+interface Heuristic2D {
+  sort: SortRule2D;
+  fit: FitRule2D;
+  split: SplitRule2D;
+  stock: StockRule2D;
+}
+
+const SORT_RULES: SortRule2D[] = ['area', 'long-side', 'short-side', 'perimeter'];
+const FIT_RULES: FitRule2D[] = ['best-short-side', 'best-long-side', 'best-area'];
+const SPLIT_RULES: SplitRule2D[] = ['shorter-leftover-axis', 'longer-leftover-axis', 'min-area', 'max-area'];
+const STOCK_RULES: StockRule2D[] = ['smallest', 'largest', 'lowest-cost-ratio'];
+
+/**
+ * All heuristic combinations tried by optimize2D.
+ * The first entry is the baseline (area / BSSF / SLAS / smallest stock); later entries
+ * only replace it when they produce a strictly better solution.
+ */
+const HEURISTICS_2D: Heuristic2D[] = [];
+for (const sort of SORT_RULES) {
+  for (const fit of FIT_RULES) {
+    for (const split of SPLIT_RULES) {
+      for (const stock of STOCK_RULES) {
+        HEURISTICS_2D.push({ sort, fit, split, stock });
+      }
+    }
+  }
+}
+
+/**
+ * Above this many part pieces, only the first REDUCED_HEURISTIC_COUNT heuristics
+ * (the baseline sort order) are tried to keep runtime bounded.
+ */
+const LARGE_INPUT_PIECES = 500;
+const REDUCED_HEURISTIC_COUNT = FIT_RULES.length * SPLIT_RULES.length * STOCK_RULES.length;
 
 interface ExpandedPart2D {
   partId: string;
@@ -32,12 +77,22 @@ interface FreeRect {
   height: number;
 }
 
+interface StockPoolItem {
+  id: string;
+  width: number;
+  height: number;
+  grain: GrainDirection;
+  cost: number;
+  remainingQuantity: number;
+}
+
 interface ActiveStock2D {
   stockId: string;
   index: number;
   width: number;
   height: number;
   grain: GrainDirection;
+  cost: number;
   freeRects: FreeRect[];
   placements: Placement2D[];
   cuts: Cut2D[];
@@ -50,7 +105,7 @@ interface PlacementFit {
   rotated: boolean;
   partWidth: number;
   partHeight: number;
-  score: number; // For BSSF (Best Short Side Fit)
+  score: number; // Lower is better (depends on FitRule2D)
 }
 
 /**
@@ -84,7 +139,26 @@ function isOrientationAllowed(
 }
 
 /**
+ * Returns the [primary, secondary] sort keys of a part (sorted descending).
+ */
+function sortKeys(part: ExpandedPart2D, rule: SortRule2D): [number, number] {
+  const longSide = Math.max(part.width, part.height);
+  const shortSide = Math.min(part.width, part.height);
+  switch (rule) {
+    case 'area':
+      return [part.area, longSide];
+    case 'long-side':
+      return [longSide, shortSide];
+    case 'short-side':
+      return [shortSide, longSide];
+    case 'perimeter':
+      return [part.width + part.height, longSide];
+  }
+}
+
+/**
  * 2D Guillotine Bin Packing Optimizer with Kerf, Grain, and Remnant constraints.
+ * Runs several greedy heuristics and returns the best solution (see evaluation.ts).
  */
 export function optimize2D(input: InputRequest): OptimizationResult {
   validateInput(input);
@@ -94,10 +168,8 @@ export function optimize2D(input: InputRequest): OptimizationResult {
 
   // Flatten parts
   const expandedParts: ExpandedPart2D[] = [];
-  let totalPartsCount = 0;
   for (const p of input.parts as Part2D[]) {
     const qty = p.quantity ?? 1;
-    totalPartsCount += qty;
     for (let i = 0; i < qty; i++) {
       expandedParts.push({
         partId: p.id,
@@ -111,25 +183,50 @@ export function optimize2D(input: InputRequest): OptimizationResult {
     }
   }
 
-  // Sort parts by Area descending (and then max dimension descending)
-  expandedParts.sort((a, b) => {
-    if (b.area !== a.area) {
-      return b.area - a.area;
+  const heuristics =
+    expandedParts.length > LARGE_INPUT_PIECES
+      ? HEURISTICS_2D.slice(0, REDUCED_HEURISTIC_COUNT)
+      : HEURISTICS_2D;
+
+  let best: { result: OptimizationResult; evaluation: SolutionEvaluation } | null = null;
+  for (const heuristic of heuristics) {
+    const activeStocksAndUnplaced = runHeuristic(input.stocks as Stock2D[], expandedParts, kerf, heuristic);
+    const candidate = buildResult(
+      activeStocksAndUnplaced.activeStocks,
+      activeStocksAndUnplaced.unplacedPartsMap,
+      expandedParts.length,
+      minRemnantWidth,
+      minRemnantHeight
+    );
+    if (best === null || isBetterEvaluation(candidate.evaluation, best.evaluation)) {
+      best = candidate;
     }
-    return Math.max(b.width, b.height) - Math.max(a.width, a.height);
+  }
+
+  return best!.result;
+}
+
+/**
+ * Runs one greedy packing pass with the given heuristic.
+ */
+function runHeuristic(
+  stocks: Stock2D[],
+  parts: ExpandedPart2D[],
+  kerf: number,
+  heuristic: Heuristic2D
+): { activeStocks: ActiveStock2D[]; unplacedPartsMap: Map<string, number> } {
+  // Sort parts descending by the heuristic's keys (stable, so ties keep input order)
+  const sortedParts = parts.slice().sort((a, b) => {
+    const [a1, a2] = sortKeys(a, heuristic.sort);
+    const [b1, b2] = sortKeys(b, heuristic.sort);
+    if (b1 !== a1) {
+      return b1 - a1;
+    }
+    return b2 - a2;
   });
 
   // Stock inventory pool
-  interface StockPoolItem {
-    id: string;
-    width: number;
-    height: number;
-    grain: GrainDirection;
-    cost: number;
-    remainingQuantity: number;
-  }
-
-  const stockPool: StockPoolItem[] = (input.stocks as Stock2D[]).map((s) => ({
+  const stockPool: StockPoolItem[] = stocks.map((s) => ({
     id: s.id,
     width: s.width,
     height: s.height,
@@ -143,14 +240,14 @@ export function optimize2D(input: InputRequest): OptimizationResult {
 
   let globalStockIndex = 0;
 
-  for (const part of expandedParts) {
+  for (const part of sortedParts) {
     let bestStockIdx = -1;
     let bestFit: PlacementFit | null = null;
 
     // Search through existing open active stocks
     for (let sIdx = 0; sIdx < activeStocks.length; sIdx++) {
       const stock = activeStocks[sIdx];
-      const fit = findBestFit(stock, part);
+      const fit = findBestFit(stock, part, heuristic.fit);
       if (fit !== null) {
         if (bestFit === null || fit.score < bestFit.score) {
           bestFit = fit;
@@ -161,87 +258,131 @@ export function optimize2D(input: InputRequest): OptimizationResult {
 
     if (bestStockIdx !== -1 && bestFit !== null) {
       // Place in existing stock
-      placePartInStock(activeStocks[bestStockIdx], part, bestFit, kerf);
-    } else {
-      // Open a new stock sheet
-      let chosenPoolIdx = -1;
-      let minStockArea = Infinity;
+      placePartInStock(activeStocks[bestStockIdx], part, bestFit, kerf, heuristic.split);
+      continue;
+    }
 
-      for (let pIdx = 0; pIdx < stockPool.length; pIdx++) {
-        const pool = stockPool[pIdx];
-        if (pool.remainingQuantity > 0) {
-          // Check if part can fit in this stock at all (including grain constraints)
-          const canFitUnrotated =
-            part.width <= pool.width + EPS &&
-            part.height <= pool.height + EPS &&
-            isOrientationAllowed(pool.grain, part.grain, part.canRotate, false);
+    // Open a new stock sheet
+    const chosenPoolIdx = chooseStock(stockPool, part, heuristic.stock);
+    if (chosenPoolIdx === -1) {
+      // Part cannot be placed in any stock
+      unplacedPartsMap.set(part.partId, (unplacedPartsMap.get(part.partId) ?? 0) + 1);
+      continue;
+    }
 
-          const canFitRotated =
-            part.height <= pool.width + EPS &&
-            part.width <= pool.height + EPS &&
-            isOrientationAllowed(pool.grain, part.grain, part.canRotate, true);
+    const chosen = stockPool[chosenPoolIdx];
+    chosen.remainingQuantity -= 1;
 
-          if (canFitUnrotated || canFitRotated) {
-            const area = pool.width * pool.height;
-            if (area < minStockArea) {
-              minStockArea = area;
-              chosenPoolIdx = pIdx;
-            }
-          }
-        }
-      }
-
-      if (chosenPoolIdx !== -1) {
-        const chosen = stockPool[chosenPoolIdx];
-        chosen.remainingQuantity -= 1;
-
-        const newStock: ActiveStock2D = {
-          stockId: chosen.id,
-          index: globalStockIndex++,
+    const newStock: ActiveStock2D = {
+      stockId: chosen.id,
+      index: globalStockIndex++,
+      width: chosen.width,
+      height: chosen.height,
+      grain: chosen.grain,
+      cost: chosen.cost,
+      freeRects: [
+        {
+          x: 0,
+          y: 0,
           width: chosen.width,
           height: chosen.height,
-          grain: chosen.grain,
-          freeRects: [
-            {
-              x: 0,
-              y: 0,
-              width: chosen.width,
-              height: chosen.height,
-            },
-          ],
-          placements: [],
-          cuts: [],
-          cutStepCount: 0,
-          cutLossArea: 0,
-        };
+        },
+      ],
+      placements: [],
+      cuts: [],
+      cutStepCount: 0,
+      cutLossArea: 0,
+    };
 
-        const fit = findBestFit(newStock, part);
-        if (fit !== null) {
-          placePartInStock(newStock, part, fit, kerf);
-          activeStocks.push(newStock);
-        } else {
-          // This should not happen since we checked feasibility, but fallback
-          chosen.remainingQuantity += 1;
-          unplacedPartsMap.set(part.partId, (unplacedPartsMap.get(part.partId) ?? 0) + 1);
-        }
-      } else {
-        // Part cannot be placed in any stock
-        unplacedPartsMap.set(part.partId, (unplacedPartsMap.get(part.partId) ?? 0) + 1);
-      }
+    const fit = findBestFit(newStock, part, heuristic.fit);
+    if (fit !== null) {
+      placePartInStock(newStock, part, fit, kerf, heuristic.split);
+      activeStocks.push(newStock);
+    } else {
+      // This should not happen since we checked feasibility, but fallback
+      chosen.remainingQuantity += 1;
+      globalStockIndex--;
+      unplacedPartsMap.set(part.partId, (unplacedPartsMap.get(part.partId) ?? 0) + 1);
     }
   }
 
-  // Calculate results, summary, remnants, and waste
+  return { activeStocks, unplacedPartsMap };
+}
+
+/**
+ * Chooses which stock type to open for a part that fits in no open stock.
+ * Returns -1 when no remaining stock can hold the part.
+ */
+function chooseStock(stockPool: StockPoolItem[], part: ExpandedPart2D, rule: StockRule2D): number {
+  let chosenPoolIdx = -1;
+  let bestKey = Infinity;
+  let bestArea = Infinity;
+
+  for (let pIdx = 0; pIdx < stockPool.length; pIdx++) {
+    const pool = stockPool[pIdx];
+    if (pool.remainingQuantity <= 0) continue;
+
+    // Check if part can fit in this stock at all (including grain constraints)
+    const canFitUnrotated =
+      part.width <= pool.width + EPS &&
+      part.height <= pool.height + EPS &&
+      isOrientationAllowed(pool.grain, part.grain, part.canRotate, false);
+
+    const canFitRotated =
+      part.height <= pool.width + EPS &&
+      part.width <= pool.height + EPS &&
+      isOrientationAllowed(pool.grain, part.grain, part.canRotate, true);
+
+    if (!canFitUnrotated && !canFitRotated) continue;
+
+    const area = pool.width * pool.height;
+    let key: number;
+    switch (rule) {
+      case 'smallest':
+        key = area;
+        break;
+      case 'largest':
+        key = -area;
+        break;
+      case 'lowest-cost-ratio':
+        key = pool.cost / area;
+        break;
+    }
+    // Ties are broken by the smaller area, then by input order
+    if (key < bestKey - EPS || (Math.abs(key - bestKey) <= EPS && area < bestArea)) {
+      bestKey = key;
+      bestArea = area;
+      chosenPoolIdx = pIdx;
+    }
+  }
+
+  return chosenPoolIdx;
+}
+
+/**
+ * Builds the output result and its evaluation from a finished packing pass.
+ */
+function buildResult(
+  activeStocks: ActiveStock2D[],
+  unplacedPartsMap: Map<string, number>,
+  totalPartsCount: number,
+  minRemnantWidth: number,
+  minRemnantHeight: number
+): { result: OptimizationResult; evaluation: SolutionEvaluation } {
   const resultStocks: StockResult2D[] = [];
   let totalStockMeasure = 0;
   let totalUsedMeasure = 0;
   let totalWasteMeasure = 0;
   let totalRemnantMeasure = 0;
   let totalPlacedCount = 0;
+  let totalCost = 0;
+  let cutCount = 0;
 
   for (const stock of activeStocks) {
     const stockArea = stock.width * stock.height;
     totalStockMeasure += stockArea;
+    totalCost += stock.cost;
+    cutCount += stock.cuts.length;
 
     let stockPartsArea = 0;
     for (const p of stock.placements) {
@@ -297,13 +438,15 @@ export function optimize2D(input: InputRequest): OptimizationResult {
   }
 
   const unplaced_parts: UnplacedPart[] = [];
+  let unplacedCount = 0;
   for (const [partId, qty] of unplacedPartsMap.entries()) {
     unplaced_parts.push({ part_id: partId, quantity: qty });
+    unplacedCount += qty;
   }
 
   const yieldRate = totalStockMeasure > 0 ? totalUsedMeasure / totalStockMeasure : 0;
 
-  return {
+  const result: OptimizationResult = {
     dimension: '2D',
     summary: {
       stock_count_used: resultStocks.length,
@@ -318,62 +461,95 @@ export function optimize2D(input: InputRequest): OptimizationResult {
     stocks: resultStocks,
     unplaced_parts,
   };
+
+  return {
+    result,
+    evaluation: {
+      unplacedCount,
+      totalCost,
+      stockCount: resultStocks.length,
+      remnantMeasure: totalRemnantMeasure,
+      cutCount,
+    },
+  };
 }
 
 /**
- * Finds the best free rectangle in the stock using Best Short Side Fit (BSSF).
+ * Finds the best free rectangle in the stock for the part (lowest score wins).
  */
-function findBestFit(stock: ActiveStock2D, part: ExpandedPart2D): PlacementFit | null {
+function findBestFit(stock: ActiveStock2D, part: ExpandedPart2D, rule: FitRule2D): PlacementFit | null {
   let bestFit: PlacementFit | null = null;
   let minScore = Infinity;
+
+  const orientations: [boolean, number, number][] = [
+    [false, part.width, part.height],
+    [true, part.height, part.width],
+  ];
 
   for (let i = 0; i < stock.freeRects.length; i++) {
     const free = stock.freeRects[i];
 
-    // Try unrotated
-    if (
-      part.width <= free.width + EPS &&
-      part.height <= free.height + EPS &&
-      isOrientationAllowed(stock.grain, part.grain, part.canRotate, false)
-    ) {
-      const leftoverW = free.width - part.width;
-      const leftoverH = free.height - part.height;
-      const score = Math.min(leftoverW, leftoverH);
-      if (score < minScore) {
-        minScore = score;
-        bestFit = {
-          rectIndex: i,
-          rotated: false,
-          partWidth: part.width,
-          partHeight: part.height,
-          score,
-        };
-      }
-    }
-
-    // Try rotated (90 deg)
-    if (
-      part.height <= free.width + EPS &&
-      part.width <= free.height + EPS &&
-      isOrientationAllowed(stock.grain, part.grain, part.canRotate, true)
-    ) {
-      const leftoverW = free.width - part.height;
-      const leftoverH = free.height - part.width;
-      const score = Math.min(leftoverW, leftoverH);
-      if (score < minScore) {
-        minScore = score;
-        bestFit = {
-          rectIndex: i,
-          rotated: true,
-          partWidth: part.height,
-          partHeight: part.width,
-          score,
-        };
+    // Try unrotated, then rotated (90 deg)
+    for (const [rotated, pw, ph] of orientations) {
+      if (
+        pw <= free.width + EPS &&
+        ph <= free.height + EPS &&
+        isOrientationAllowed(stock.grain, part.grain, part.canRotate, rotated)
+      ) {
+        const score = fitScore(free, pw, ph, rule);
+        if (score < minScore) {
+          minScore = score;
+          bestFit = {
+            rectIndex: i,
+            rotated,
+            partWidth: pw,
+            partHeight: ph,
+            score,
+          };
+        }
       }
     }
   }
 
   return bestFit;
+}
+
+function fitScore(free: FreeRect, pw: number, ph: number, rule: FitRule2D): number {
+  const leftoverW = free.width - pw;
+  const leftoverH = free.height - ph;
+  switch (rule) {
+    case 'best-short-side':
+      return Math.min(leftoverW, leftoverH);
+    case 'best-long-side':
+      return Math.max(leftoverW, leftoverH);
+    case 'best-area':
+      return free.width * free.height - pw * ph;
+  }
+}
+
+/**
+ * Decides whether the full-length cut runs horizontally (true) or vertically (false).
+ */
+function shouldSplitHorizontal(
+  pw: number,
+  ph: number,
+  leftoverW: number,
+  leftoverH: number,
+  rule: SplitRule2D
+): boolean {
+  switch (rule) {
+    case 'shorter-leftover-axis':
+      // Split along the axis that leaves the smaller remnant, maximizing the size of the other remnant.
+      return leftoverW <= leftoverH;
+    case 'longer-leftover-axis':
+      return leftoverW > leftoverH;
+    case 'min-area':
+      // Makes the smaller of the two new free rects as small as possible
+      return pw * leftoverH > ph * leftoverW;
+    case 'max-area':
+      // Keeps the two new free rects as balanced as possible
+      return pw * leftoverH <= ph * leftoverW;
+  }
 }
 
 /**
@@ -384,7 +560,8 @@ function placePartInStock(
   stock: ActiveStock2D,
   part: ExpandedPart2D,
   fit: PlacementFit,
-  kerf: number
+  kerf: number,
+  splitRule: SplitRule2D
 ): void {
   const free = stock.freeRects.splice(fit.rectIndex, 1)[0];
 
@@ -408,9 +585,7 @@ function placePartInStock(
   const hasLeftoverW = leftoverW > EPS;
   const hasLeftoverH = leftoverH > EPS;
 
-  // Guillotine Split Decision: Shorter Leftover Axis Split (SLAS)
-  // Split along the axis that leaves the smaller remnant, maximizing the size of the other remnant.
-  const splitHorizontal = leftoverW <= leftoverH;
+  const splitHorizontal = shouldSplitHorizontal(pw, ph, leftoverW, leftoverH, splitRule);
 
   // Width/height of the free rects left after the blade passes (<= 0 when the kerf eats the leftover)
   const topH = free.height - ph - kerf;

@@ -26,6 +26,7 @@ packages/typescript/
   src/optimizer1d.ts           # 1D 最適化（内部で binPack1D を利用）
   src/optimizer2d.ts           # 2D ギロチン最適化
   src/validate.ts              # 入力検証（schema.json の制約をチェック）
+  src/evaluation.ts            # ヒューリスティクス候補の優劣判定
   src/binpacking/              # 汎用 1D ビンパッキング（types.ts, packer1d.ts）
   bin/cli.ts                   # CLI（wood-cutting-optimizer / wood-opt）
   tests/*.test.ts              # node:test
@@ -35,6 +36,7 @@ packages/python/
     types.py                   # 入出力 dataclass（OptimizationResult.to_dict()）
     optimizer1d.py / optimizer2d.py
     validate.py                # 入力検証（schema.json の制約をチェック）
+    evaluation.py              # ヒューリスティクス候補の優劣判定
     binpacking/                # 汎用 1D ビンパッキング（types.py, packer1d.py）
     cli.py / __main__.py       # CLI（argparse）
   tests/test_*.py              # unittest
@@ -94,23 +96,32 @@ CI（`.github/workflows/ci.yml`）では Node 20/22、Python 3.9/3.13 のテス�
 
 ## アルゴリズムの要点
 
+### 複数ヒューリスティクスと解の選択（1D / 2D 共通）
+- 1D・2D とも、複数のヒューリスティクスの組み合わせで貪欲法を実行し、`evaluation` の基準で最良の解を返す。
+- 優劣の基準（優先順）: ① 未配置の部材数が少ない → ② 使用原材の `cost` 合計が低い（未指定時は面積／長さ）→ ③ 使用本数・枚数が少ない → ④ 再利用可能な端材が多い → ⑤ カット数が少ない。同点なら先に試した候補を採用。
+- 候補リストの **先頭は従来のアルゴリズム**。後の候補は「厳密に良い」ときだけ採用されるので、従来より悪い結果にはならない。候補を追加するときも先頭は変えないでください。
+- 候補の順序・ソートの同点処理・比較の許容誤差は TS と Python で完全に一致させる必要があります（`scripts/check_parity.py` で検証）。
+
 ### 1D（`optimizer1d`）
-- `binPack1D` / `bin_pack_1d` を `strategy: best-fit-decreasing`、`itemSpacing = kerf` で呼び出すラッパー。
+- `binPack1D` / `bin_pack_1d`（`itemSpacing = kerf`）を、strategy（BFD / FFD / WFD）× `binSelection`（`smallest` / `largest` / `lowest-cost-ratio`）の9通りで実行。
+- 各結果に対して「中身が収まる、より安い在庫の原材に差し替える」ダウンサイジングを適用してから評価。
 - 部材間にのみ kerf を入れる（先頭部材の前には入れない）。部材間の `cuts[].x` は `次の部材の offset - kerf`。
 - 末尾に余りがある場合は、最後の部材の直後（`x = usedCapacity`）に最終カットを追加し、余りから kerf を差し引く。余りが kerf 未満なら余り全体が切断ロスになる。
 - kerf を差し引いた余りが `min_remnant_size.length` 以上なら remnant、未満なら waste。切断ロスも waste に加算。
 
 ### 汎用 1D ビンパッキング（`binpacking/packer1d`）
 - `quantity` 分だけアイテムを展開 → サイズ降順ソート → BFD / FFD / WFD で既存ビンへ配置。
-- 既存ビンに入らない場合、在庫プールから「アイテム配置後の余りが最小」の種類のビンを新規オープン。
+- 既存ビンに入らない場合、`binSelection` に従って新規ビンを開く（`smallest`: 入る中で最小容量＝デフォルト、`largest`: 最大容量、`lowest-cost-ratio`: 容量あたりコスト最小）。
 - 収まらないアイテムは `unpackedItems` に id 単位で集計。
 - `data`（ジェネリクス）で呼び出し側のメタデータを透過的に保持。
 
 ### 2D（`optimizer2d`）
-- 部材を `quantity` 分展開し、面積降順（同面積なら長辺降順）でソート。
-- 既存の使用中シート全体から **Best Short Side Fit (BSSF)** で最良の空き矩形を選択。
-- どこにも入らなければ、配置可能な在庫のうち **面積最小** のシートを新規オープン。
-- 配置後は **Shorter Leftover Axis Split (SLAS)** でギロチン分割し、kerf を差し引いた空き矩形を生成。`cuts` には `step` 番号付きで切断線を記録。
+- 部材を `quantity` 分展開し、次の4軸の組み合わせ（4×3×4×3 = 144通り）で貪欲法を実行する。部材が500個を超える場合は、先頭のソート順（面積）の36通りだけを試す。
+  - ソート順（降順）: `area`（同値なら長辺）/ `long-side` / `short-side` / `perimeter`
+  - 空き矩形の選択: `best-short-side`（BSSF）/ `best-long-side`（BLSF）/ `best-area`（BAF）。使用中の全シートから選ぶ
+  - ギロチン分割: `shorter-leftover-axis`（SLAS）/ `longer-leftover-axis` / `min-area` / `max-area`
+  - 新規シートの選択: `smallest`（面積最小）/ `largest` / `lowest-cost-ratio`（面積あたりコスト最小）
+- 配置後はギロチン分割し、kerf を差し引いた空き矩形を生成。`cuts` には `step` 番号付きで切断線を記録。
 - 木目判定 `isOrientationAllowed` / `is_orientation_allowed`:
   - `can_rotate: false` なら回転不可。
   - シートか部材のどちらかが `grain: "none"` なら向きは自由。
@@ -131,8 +142,8 @@ CI（`.github/workflows/ci.yml`）では Node 20/22、Python 3.9/3.13 のテス�
 ## 既知の差異・注意点
 
 - `optimize()` は両言語とも `{ "input": {...} }` 形式（テストケースの形）もそのまま受け付けます。
-- `cost` フィールドは入力として受け付けますが、現状の在庫選択ロジックでは使われていません（ロードマップ「コスト最適化」参照）。
-- ロードマップ上の未実装項目: SVG カット図面レンダラー、Rust/WASM/PyO3 移植、コスト最適化。
+- `cost` は解の選択基準（総コスト最小）に使われます。未指定なら 2D は面積、1D は長さがコストになります（＝歩留まり最大化）。
+- ロードマップ上の未実装項目: SVG カット図面レンダラー、Rust/WASM/PyO3 移植。
 
 ## コミット
 
