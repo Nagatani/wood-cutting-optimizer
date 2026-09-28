@@ -51,6 +51,15 @@ def _check_grain(label: str, value: Any) -> None:
         _fail(f"{label}.grain must be one of {', '.join(GRAIN_DIRECTIONS)} (got {value})")
 
 
+def _check_unique_ids(list_name: str, entries: List[Any]) -> None:
+    """Ids identify parts and stocks in the output, so they must be unique within each list."""
+    seen = set()
+    for i, entry in enumerate(entries):
+        if entry.id in seen:
+            _fail(f'{list_name}[{i}].id "{entry.id}" is duplicated (ids must be unique)')
+        seen.add(entry.id)
+
+
 def _check_id(label: str, value: Any) -> None:
     if not isinstance(value, str) or len(value) == 0:
         _fail(f"{label}.id must be a non-empty string")
@@ -89,6 +98,8 @@ def validate_1d(stocks: List[Any], parts: List[Any], kerf: Any, min_remnant_size
         _check_id(label, p.id)
         _check_positive(f"{label}.length", p.length)
         _check_quantity(label, p.quantity)
+    _check_unique_ids("stocks", stocks)
+    _check_unique_ids("parts", parts)
 
 
 def validate_2d(stocks: List[Any], parts: List[Any], kerf: Any, min_remnant_size: Optional[MinRemnantSize]) -> None:
@@ -113,3 +124,5 @@ def validate_2d(stocks: List[Any], parts: List[Any], kerf: Any, min_remnant_size
         if p.can_rotate is not None and not isinstance(p.can_rotate, bool):
             _fail(f"{label}.can_rotate must be a boolean (got {p.can_rotate})")
         _check_quantity(label, p.quantity)
+    _check_unique_ids("stocks", stocks)
+    _check_unique_ids("parts", parts)

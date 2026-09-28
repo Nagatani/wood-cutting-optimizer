@@ -44,6 +44,17 @@ function checkGrain(label: string, value: unknown): void {
   }
 }
 
+/** Ids identify parts and stocks in the output, so they must be unique within each list. */
+function checkUniqueIds(listName: string, entries: { id: string }[]): void {
+  const seen = new Set<string>();
+  entries.forEach((entry, i) => {
+    if (seen.has(entry.id)) {
+      fail(`${listName}[${i}].id "${entry.id}" is duplicated (ids must be unique)`);
+    }
+    seen.add(entry.id);
+  });
+}
+
 function checkId(label: string, value: unknown): void {
   if (typeof value !== 'string' || value.length === 0) {
     fail(`${label}.id must be a non-empty string`);
@@ -109,4 +120,7 @@ export function validateInput(input: InputRequest): void {
     }
     checkQuantity(label, p.quantity);
   });
+
+  checkUniqueIds('stocks', input.stocks);
+  checkUniqueIds('parts', input.parts);
 }

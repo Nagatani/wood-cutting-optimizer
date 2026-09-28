@@ -227,6 +227,8 @@ class TestInputHandling(unittest.TestCase):
             "fractional quantity": {**self.VALID, "parts": [{"id": "a", "length": 10, "quantity": 2.5}]},
             "missing id": {**self.VALID, "parts": [{"length": 10}]},
             "unlimited part quantity": {**self.VALID, "parts": [{"id": "a", "length": 10, "quantity": "unlimited"}]},
+            "duplicate part ids": {**self.VALID, "parts": [{"id": "a", "length": 10}, {"id": "a", "length": 20}]},
+            "duplicate stock ids": {**self.VALID, "stocks": [{"id": "s", "length": 100}, {"id": "s", "length": 200}]},
             "negative trim": {**self.VALID, "stocks": [{"id": "s", "length": 100, "trim": -1}]},
             "trim consuming the whole stock": {**self.VALID, "stocks": [{"id": "s", "length": 100, "trim": 50}]},
             "unknown stock quantity string": {**self.VALID, "stocks": [{"id": "s", "length": 100, "quantity": "many"}]},

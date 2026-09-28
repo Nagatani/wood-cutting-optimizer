@@ -247,6 +247,8 @@ describe('Input handling', () => {
     ['fractional quantity', { ...valid, parts: [{ id: 'a', length: 10, quantity: 2.5 }] }],
     ['missing id', { ...valid, parts: [{ length: 10 }] }],
     ['unlimited part quantity', { ...valid, parts: [{ id: 'a', length: 10, quantity: 'unlimited' }] }],
+    ['duplicate part ids', { ...valid, parts: [{ id: 'a', length: 10 }, { id: 'a', length: 20 }] }],
+    ['duplicate stock ids', { ...valid, stocks: [{ id: 's', length: 100 }, { id: 's', length: 200 }] }],
     ['negative trim', { ...valid, stocks: [{ id: 's', length: 100, trim: -1 }] }],
     ['trim consuming the whole stock', { ...valid, stocks: [{ id: 's', length: 100, trim: 50 }] }],
     ['unknown stock quantity string', { ...valid, stocks: [{ id: 's', length: 100, quantity: 'many' }] }],

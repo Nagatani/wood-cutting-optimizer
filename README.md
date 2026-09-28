@@ -300,7 +300,7 @@ GitHub Actions（`.github/workflows/ci.yml`）で、上記すべてを push / Pu
 ```
 
 ### 入力検証
-- 仕様に反する入力（負や 0 の寸法、整数でない `quantity`、負の `kerf`、未知の `grain` / `dimension` など）はエラーになります（TypeScript: `Error`、Python: `ValueError`。メッセージは `Invalid input: ...`）。
+- 仕様に反する入力（負や 0 の寸法、整数でない `quantity`、負の `kerf`、未知の `grain` / `dimension`、`stocks` / `parts` 内での `id` の重複など）はエラーになります（TypeScript: `Error`、Python: `ValueError`。メッセージは `Invalid input: ...`）。
 - `cost` を指定すると、使用原材の総コストが最小になる解を優先します。未指定の場合は面積（2D）／長さ（1D）をコストとみなします。
 - 端材の判定: 原板が `grain: "none"` なら、余りが `min_remnant_size` を縦横どちらの向きで満たしても端材になります。木目がある原板では向きを固定して判定します。
 
