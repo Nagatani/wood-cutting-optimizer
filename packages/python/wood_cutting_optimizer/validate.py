@@ -74,6 +74,13 @@ def validate_common(kerf: Any, min_remnant_size: Optional[MinRemnantSize]) -> No
                 _check_non_negative(f"min_remnant_size.{key}", v)
 
 
+def _check_not_empty(stocks: List[Any], parts: List[Any]) -> None:
+    if len(stocks) == 0:
+        _fail("stocks must contain at least one stock")
+    if len(parts) == 0:
+        _fail("parts must contain at least one part")
+
+
 def _check_trim(label: str, trim: Any, shortest: float) -> None:
     if trim is None:
         return
@@ -85,6 +92,7 @@ def _check_trim(label: str, trim: Any, shortest: float) -> None:
 def validate_1d(stocks: List[Any], parts: List[Any], kerf: Any, min_remnant_size: Optional[MinRemnantSize]) -> None:
     """Validates 1D input against the constraints of specification/schema.json."""
     validate_common(kerf, min_remnant_size)
+    _check_not_empty(stocks, parts)
     for i, s in enumerate(stocks):
         label = f"stocks[{i}]"
         _check_id(label, s.id)
@@ -105,6 +113,7 @@ def validate_1d(stocks: List[Any], parts: List[Any], kerf: Any, min_remnant_size
 def validate_2d(stocks: List[Any], parts: List[Any], kerf: Any, min_remnant_size: Optional[MinRemnantSize]) -> None:
     """Validates 2D input against the constraints of specification/schema.json."""
     validate_common(kerf, min_remnant_size)
+    _check_not_empty(stocks, parts)
     for i, s in enumerate(stocks):
         label = f"stocks[{i}]"
         _check_id(label, s.id)

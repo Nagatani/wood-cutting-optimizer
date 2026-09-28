@@ -62,6 +62,8 @@ def optimize(data: Dict[str, Any]) -> OptimizationResult:
 
     # Support wrapper like { "input": { ... } }
     input_data = data.get("input", data)
+    if not isinstance(input_data, dict):
+        raise ValueError("Invalid input: input must be an object")
 
     dimension = input_data.get("dimension")
     if dimension not in ("1D", "2D"):

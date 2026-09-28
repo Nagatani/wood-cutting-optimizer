@@ -83,6 +83,8 @@ export function validateInput(input: InputRequest): void {
   }
   if (!Array.isArray(input.stocks)) fail('stocks must be an array');
   if (!Array.isArray(input.parts)) fail('parts must be an array');
+  if (input.stocks.length === 0) fail('stocks must contain at least one stock');
+  if (input.parts.length === 0) fail('parts must contain at least one part');
 
   input.stocks.forEach((s: any, i) => {
     const label = `stocks[${i}]`;

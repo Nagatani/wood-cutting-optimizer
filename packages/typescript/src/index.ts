@@ -16,6 +16,9 @@ import { optimize2D } from './optimizer2d.js';
 export function optimize(data: InputRequest | { input: InputRequest }): OptimizationResult {
   const input: InputRequest =
     data !== null && typeof data === 'object' && 'input' in data ? data.input : data;
+  if (input === null || typeof input !== 'object') {
+    throw new Error('Invalid input: input must be an object');
+  }
   if (input.dimension === '1D') {
     return optimize1D(input);
   } else if (input.dimension === '2D') {
