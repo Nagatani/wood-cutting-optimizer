@@ -9,7 +9,7 @@ from wood_cutting_optimizer.binpacking import (
     ItemDefinition,
     BinPacking1DOptions,
 )
-from wood_cutting_optimizer.types import Cut1D, Segment1D, Rect2D, StockUsage
+from wood_cutting_optimizer.types import Cut1D, Segment1D, Rect2D, StockUsage, Placement1D, UnplacedPart
 
 TEST_CASES_DIR = Path(__file__).resolve().parent.parent.parent.parent / "test-cases"
 if not TEST_CASES_DIR.exists():
@@ -164,6 +164,50 @@ class TestUnlimitedStock(unittest.TestCase):
         self.assertEqual(result.summary.stock_count_used, 10)
 
 
+class TestEdgeTrim(unittest.TestCase):
+    def test_parts_inside_trimmed_area_2d(self):
+        with open(TEST_CASES_DIR / "2d_edge_trim.json", "r", encoding="utf-8") as f:
+            case_data = json.load(f)
+        result = optimize(case_data["input"])
+        t = case_data["expected"]["trim"]
+        self.assertEqual(len(result.unplaced_parts), 0)
+        for stock in result.stocks:
+            for p in stock.placements:
+                self.assertGreaterEqual(p.x, t - 1e-6)
+                self.assertGreaterEqual(p.y, t - 1e-6)
+                self.assertLessEqual(p.x + p.width, stock.width - t + 1e-6)
+                self.assertLessEqual(p.y + p.height, stock.height - t + 1e-6)
+            self.assertEqual(stock.waste[:4], [
+                Rect2D(x=0.0, y=0.0, width=stock.width, height=t),
+                Rect2D(x=0.0, y=stock.height - t, width=stock.width, height=t),
+                Rect2D(x=0.0, y=t, width=t, height=stock.height - 2 * t),
+                Rect2D(x=stock.width - t, y=t, width=t, height=stock.height - 2 * t),
+            ])
+
+    def test_trim_1d(self):
+        result = optimize({
+            "dimension": "1D",
+            "kerf": 3,
+            "min_remnant_size": {"length": 100},
+            "stocks": [{"id": "s", "length": 1000, "trim": 10}],
+            "parts": [{"id": "a", "length": 400}],
+        })
+        stock = result.stocks[0]
+        self.assertEqual(stock.placements, [Placement1D(part_id="a", x=10.0, length=400.0)])
+        self.assertEqual(stock.cuts, [Cut1D(x=410.0, kerf=3.0, step=1)])
+        self.assertEqual(stock.remnants, [Segment1D(x=413.0, length=577.0)])
+        self.assertEqual(stock.waste, [Segment1D(x=0.0, length=10.0), Segment1D(x=990.0, length=10.0)])
+        self.assertEqual(result.summary.total_waste_measure, 23.0)
+
+    def test_part_fitting_only_without_trim(self):
+        result = optimize({
+            "dimension": "2D",
+            "stocks": [{"id": "s", "width": 910, "height": 1820, "trim": 6}],
+            "parts": [{"id": "a", "width": 900, "height": 900}],
+        })
+        self.assertEqual(result.unplaced_parts, [UnplacedPart(part_id="a", quantity=1)])
+
+
 class TestInputHandling(unittest.TestCase):
     VALID = {
         "dimension": "1D",
@@ -183,6 +227,8 @@ class TestInputHandling(unittest.TestCase):
             "fractional quantity": {**self.VALID, "parts": [{"id": "a", "length": 10, "quantity": 2.5}]},
             "missing id": {**self.VALID, "parts": [{"length": 10}]},
             "unlimited part quantity": {**self.VALID, "parts": [{"id": "a", "length": 10, "quantity": "unlimited"}]},
+            "negative trim": {**self.VALID, "stocks": [{"id": "s", "length": 100, "trim": -1}]},
+            "trim consuming the whole stock": {**self.VALID, "stocks": [{"id": "s", "length": 100, "trim": 50}]},
             "unknown stock quantity string": {**self.VALID, "stocks": [{"id": "s", "length": 100, "quantity": "many"}]},
             "stocks not an array": {**self.VALID, "stocks": None},
             "invalid grain": {

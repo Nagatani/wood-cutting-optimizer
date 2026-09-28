@@ -85,6 +85,13 @@ export function validateInput(input: InputRequest): void {
     }
     checkStockQuantity(label, s.quantity);
     if (s.cost !== undefined) checkNonNegative(`${label}.cost`, s.cost);
+    if (s.trim !== undefined) {
+      checkNonNegative(`${label}.trim`, s.trim);
+      const shortest = input.dimension === '1D' ? s.length : Math.min(s.width, s.height);
+      if (s.trim * 2 >= shortest) {
+        fail(`${label}.trim leaves no usable material (trim ${s.trim} on each edge of ${shortest})`);
+      }
+    }
   });
 
   input.parts.forEach((p: any, i) => {

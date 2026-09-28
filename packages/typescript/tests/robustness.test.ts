@@ -178,6 +178,56 @@ describe('Unlimited stock quantity', () => {
   });
 });
 
+describe('Edge trim', () => {
+  it('should keep every part inside the trimmed area (2D)', () => {
+    const caseData = JSON.parse(fs.readFileSync(path.join(testCasesDir, '2d_edge_trim.json'), 'utf-8'));
+    const result = optimize(caseData.input);
+    const t = caseData.expected.trim;
+    assert.strictEqual(result.unplaced_parts.length, 0);
+    for (const stock of result.stocks as StockResult2D[]) {
+      for (const p of stock.placements) {
+        assert.ok(p.x >= t - 1e-6 && p.y >= t - 1e-6, `${p.part_id} starts inside the trim`);
+        assert.ok(p.x + p.width <= stock.width - t + 1e-6, `${p.part_id} exceeds the right trim`);
+        assert.ok(p.y + p.height <= stock.height - t + 1e-6, `${p.part_id} exceeds the bottom trim`);
+      }
+      assert.deepStrictEqual(stock.waste.slice(0, 4), [
+        { x: 0, y: 0, width: stock.width, height: t },
+        { x: 0, y: stock.height - t, width: stock.width, height: t },
+        { x: 0, y: t, width: t, height: stock.height - 2 * t },
+        { x: stock.width - t, y: t, width: t, height: stock.height - 2 * t },
+      ]);
+    }
+  });
+
+  it('should shift parts past the trimmed start and report both ends as waste (1D)', () => {
+    const result = optimize({
+      dimension: '1D',
+      kerf: 3,
+      min_remnant_size: { length: 100 },
+      stocks: [{ id: 's', length: 1000, trim: 10 }],
+      parts: [{ id: 'a', length: 400 }],
+    });
+    const stock = result.stocks[0] as StockResult1D;
+    assert.deepStrictEqual(stock.placements, [{ part_id: 'a', x: 10, length: 400 }]);
+    assert.deepStrictEqual(stock.cuts, [{ x: 410, kerf: 3, step: 1 }]);
+    assert.deepStrictEqual(stock.remnants, [{ x: 413, length: 577 }]);
+    assert.deepStrictEqual(stock.waste, [
+      { x: 0, length: 10 },
+      { x: 990, length: 10 },
+    ]);
+    assert.strictEqual(result.summary.total_waste_measure, 23);
+  });
+
+  it('should not place a part that only fits without the trim', () => {
+    const result = optimize({
+      dimension: '2D',
+      stocks: [{ id: 's', width: 910, height: 1820, trim: 6 }],
+      parts: [{ id: 'a', width: 900, height: 900 }],
+    });
+    assert.deepStrictEqual(result.unplaced_parts, [{ part_id: 'a', quantity: 1 }]);
+  });
+});
+
 describe('Input handling', () => {
   const valid: InputRequest = {
     dimension: '1D',
@@ -197,6 +247,8 @@ describe('Input handling', () => {
     ['fractional quantity', { ...valid, parts: [{ id: 'a', length: 10, quantity: 2.5 }] }],
     ['missing id', { ...valid, parts: [{ length: 10 }] }],
     ['unlimited part quantity', { ...valid, parts: [{ id: 'a', length: 10, quantity: 'unlimited' }] }],
+    ['negative trim', { ...valid, stocks: [{ id: 's', length: 100, trim: -1 }] }],
+    ['trim consuming the whole stock', { ...valid, stocks: [{ id: 's', length: 100, trim: 50 }] }],
     ['unknown stock quantity string', { ...valid, stocks: [{ id: 's', length: 100, quantity: 'many' }] }],
     ['stocks not an array', { ...valid, stocks: null }],
     [

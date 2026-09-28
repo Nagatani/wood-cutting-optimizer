@@ -136,6 +136,7 @@ CI（`.github/workflows/ci.yml`）では Node 20/22、Python 3.9/3.13 のテス�
 ### 入力検証・浮動小数点
 - `optimize1D` / `optimize2D`（Python は `optimize_1d` / `optimize_2d`）の先頭で `validateInput` / `validate_1d`・`validate_2d` を呼び、schema.json 違反（負の寸法、非整数の quantity、未知の grain、負の kerf など）は `Invalid input: ...` のエラー（TS: `Error`、Python: `ValueError`）を投げる。
 - `binPack1D` / `bin_pack_1d` も不正な容量・サイズ・quantity・`itemSpacing`・未知の strategy をエラーにする。ビンの quantity は `Infinity`（Python は `math.inf`）で無制限。
+- 原材の `trim` は各辺（1D は両端）から切り落とす幅。2D は最初の空き矩形を `(trim, trim, W-2trim, H-2trim)` にし、1D はビン容量を `length - 2trim` にして配置後に `x` を `trim` だけずらす。切り落とした帯は `waste` の先頭（1D は先頭と末尾）に出力し、`cuts` には含めない。`2 * trim >= 最短辺` は入力エラー。
 - 原材の `quantity` は整数のほか `"unlimited"` を受け付ける（部材は不可）。内部では `resolveStockQuantity` / `resolve_stock_quantity` で `Infinity` / `math.inf` に変換する。
 - 寸法の比較には `EPS = 1e-9` の許容誤差を使う（`0.1 + 0.2` の部材が長さ `0.3` の原材に収まるように）。新しい比較を追加するときも同じ `EPS` を使ってください。
 

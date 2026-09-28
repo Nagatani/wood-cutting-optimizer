@@ -31,6 +31,11 @@ STRATEGIES = ("best-fit-decreasing", "first-fit-decreasing", "worst-fit-decreasi
 BIN_SELECTIONS = ("smallest", "largest", "lowest-cost-ratio")
 
 
+def _usable_length(stock: Stock1D) -> float:
+    """Length available for parts after trimming both ends."""
+    return float(stock.length) - float(stock.trim or 0.0) * 2
+
+
 def _stock_cost(stock: Stock1D) -> float:
     return float(stock.cost) if stock.cost is not None else float(stock.length)
 
@@ -57,7 +62,7 @@ def _downsize_stocks(stocks: List[Stock1D], pack_result: BinPacking1DResult) -> 
         for j, candidate in enumerate(stocks):
             if j == used["stock_index"] or remaining[j] <= 0:
                 continue
-            if candidate.length < used["used_capacity"] - EPS:
+            if _usable_length(candidate) < used["used_capacity"] - EPS:
                 continue
             cost = _stock_cost(candidate)
             best_cost = _stock_cost(stocks[best_index])
@@ -89,8 +94,10 @@ def _build_result(
 
     for used in used_stocks:
         stock = stocks[used["stock_index"]]
-        capacity = float(stock.length)
-        total_stock_measure += capacity
+        # Parts are laid out after the trimmed start of the stock
+        trim = float(stock.trim or 0.0)
+        capacity = _usable_length(stock)
+        total_stock_measure += float(stock.length)
         total_cost += _stock_cost(stock)
         placements: List[Placement1D] = []
         cuts: List[Cut1D] = []
@@ -98,13 +105,13 @@ def _build_result(
         for i, item in enumerate(used["items"]):
             if i > 0:
                 cuts.append(Cut1D(
-                    x=item.offset - kerf,
+                    x=trim + item.offset - kerf,
                     kerf=kerf,
                     step=i,
                 ))
             placements.append(Placement1D(
                 part_id=item.id,
-                x=item.offset,
+                x=trim + item.offset,
                 length=item.size,
             ))
             total_used_measure += item.size
@@ -118,12 +125,17 @@ def _build_result(
         remnants: List[Segment1D] = []
         waste: List[Segment1D] = []
 
+        # Trimmed ends are waste
+        if trim > 0:
+            waste.append(Segment1D(x=0.0, length=trim))
+            total_waste_measure += trim * 2
+
         if remaining > EPS:
             # A final cut separates the last part from the leftover.
             # If the leftover is thinner than the kerf, the blade consumes all of it.
             end_cut_loss = min(kerf, remaining)
             cuts.append(Cut1D(
-                x=used["used_capacity"],
+                x=trim + used["used_capacity"],
                 kerf=kerf,
                 step=len(cuts) + 1,
             ))
@@ -131,13 +143,16 @@ def _build_result(
 
             leftover = round(remaining - end_cut_loss, 6)
             if leftover > EPS:
-                segment = Segment1D(x=used["used_capacity"] + end_cut_loss, length=leftover)
+                segment = Segment1D(x=trim + used["used_capacity"] + end_cut_loss, length=leftover)
                 if min_remnant_length > 0 and leftover >= min_remnant_length:
                     remnants.append(segment)
                     total_remnant_measure += leftover
                 else:
                     waste.append(segment)
                     total_waste_measure += leftover
+
+        if trim > 0:
+            waste.append(Segment1D(x=float(stock.length) - trim, length=trim))
 
         # Cut loss is also considered waste
         total_waste_measure += cut_loss
@@ -146,7 +161,7 @@ def _build_result(
         result_stocks.append(StockResult1D(
             stock_id=stock.id,
             index=used["index"],
-            length=capacity,
+            length=float(stock.length),
             placements=placements,
             cuts=cuts,
             remnants=remnants,
@@ -200,7 +215,7 @@ def optimize_1d(
     bins = [
         BinDefinition(
             id=s.id,
-            capacity=float(s.length),
+            capacity=_usable_length(s),
             quantity=resolve_stock_quantity(s.quantity),
             cost=_stock_cost(s),
             data=i,

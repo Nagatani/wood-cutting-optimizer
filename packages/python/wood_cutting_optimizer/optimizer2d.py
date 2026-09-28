@@ -62,6 +62,7 @@ class ActiveStock2D:
         index: int,
         width: float,
         height: float,
+        trim: float,
         grain: GrainDirection,
         cost: float,
     ):
@@ -70,9 +71,11 @@ class ActiveStock2D:
         self.index = index
         self.width = width
         self.height = height
+        self.trim = trim
         self.grain = grain
         self.cost = cost
-        self.free_rects: List[FreeRect] = [FreeRect(0.0, 0.0, width, height)]
+        # The usable area inside the trimmed edges
+        self.free_rects: List[FreeRect] = [FreeRect(trim, trim, width - trim * 2, height - trim * 2)]
         self.placements: List[Placement2D] = []
         self.cuts: List[Cut2D] = []
         self.cut_step_count: int = 0
@@ -304,20 +307,23 @@ def _choose_stock(stock_pool: List[Dict[str, Any]], part: Dict[str, Any], rule: 
         if pool["remaining_quantity"] <= 0:
             continue
 
+        # Check if part can fit in the usable (trimmed) area at all (including grain constraints)
+        usable_width = pool["width"] - pool["trim"] * 2
+        usable_height = pool["height"] - pool["trim"] * 2
         can_fit_unrotated = (
-            part["width"] <= pool["width"] + EPS
-            and part["height"] <= pool["height"] + EPS
+            part["width"] <= usable_width + EPS
+            and part["height"] <= usable_height + EPS
             and is_orientation_allowed(pool["grain"], part["grain"], part["can_rotate"], False)
         )
         can_fit_rotated = (
-            part["height"] <= pool["width"] + EPS
-            and part["width"] <= pool["height"] + EPS
+            part["height"] <= usable_width + EPS
+            and part["width"] <= usable_height + EPS
             and is_orientation_allowed(pool["grain"], part["grain"], part["can_rotate"], True)
         )
         if not can_fit_unrotated and not can_fit_rotated:
             continue
 
-        area = pool["width"] * pool["height"]
+        area = usable_width * usable_height
         if rule == "smallest":
             key = area
         elif rule == "largest":
@@ -352,6 +358,7 @@ def _run_heuristic(
             "id": s.id,
             "width": float(s.width),
             "height": float(s.height),
+            "trim": float(s.trim) if s.trim is not None else 0.0,
             "grain": s.grain or "none",
             "cost": float(s.cost) if s.cost is not None else float(s.width) * float(s.height),
             "remaining_quantity": resolve_stock_quantity(s.quantity),
@@ -390,6 +397,7 @@ def _run_heuristic(
             index=global_stock_index,
             width=chosen["width"],
             height=chosen["height"],
+            trim=chosen["trim"],
             grain=chosen["grain"],
             cost=chosen["cost"],
         )
@@ -406,6 +414,20 @@ def _run_heuristic(
             unplaced_parts_map[part["part_id"]] = unplaced_parts_map.get(part["part_id"], 0) + 1
 
     return active_stocks, unplaced_parts_map
+
+
+def _trim_strips(stock: ActiveStock2D) -> List[Rect2D]:
+    """Strips removed by the edge trim (top, bottom, left, right), reported as waste."""
+    t = stock.trim
+    if t <= 0:
+        return []
+    inner_height = stock.height - t * 2
+    return [
+        Rect2D(x=0.0, y=0.0, width=stock.width, height=t),
+        Rect2D(x=0.0, y=stock.height - t, width=stock.width, height=t),
+        Rect2D(x=0.0, y=t, width=t, height=inner_height),
+        Rect2D(x=stock.width - t, y=t, width=t, height=inner_height),
+    ]
 
 
 def _is_remnant_rect(
@@ -455,7 +477,9 @@ def _build_result(
         total_placed_count += len(stock.placements)
 
         remnants: List[Rect2D] = []
-        waste: List[Rect2D] = []
+        waste: List[Rect2D] = _trim_strips(stock)
+        for strip in waste:
+            total_waste_measure += strip.width * strip.height
 
         for rect in stock.free_rects:
             if rect.width <= 0 or rect.height <= 0:

@@ -45,7 +45,7 @@ export function optimize1D(input: InputRequest): OptimizationResult {
 
   const bins: BinDefinition<number>[] = stocks.map((s, i) => ({
     id: s.id,
-    capacity: s.length,
+    capacity: usableLength(s),
     quantity: resolveStockQuantity(s.quantity),
     cost: stockCost(s),
     data: i,
@@ -73,6 +73,11 @@ export function optimize1D(input: InputRequest): OptimizationResult {
   return best!.result;
 }
 
+/** Length available for parts after trimming both ends. */
+function usableLength(stock: Stock1D): number {
+  return stock.length - (stock.trim ?? 0) * 2;
+}
+
 function stockCost(stock: Stock1D): number {
   return stock.cost ?? stock.length;
 }
@@ -98,7 +103,7 @@ function downsizeStocks(stocks: Stock1D[], packResult: BinPacking1DResult<number
     let bestIndex = used.stockIndex;
     for (let j = 0; j < stocks.length; j++) {
       if (j === used.stockIndex || remaining[j] <= 0) continue;
-      if (stocks[j].length < used.usedCapacity - EPS) continue;
+      if (usableLength(stocks[j]) < used.usedCapacity - EPS) continue;
       const cost = stockCost(stocks[j]);
       const bestCost = stockCost(stocks[bestIndex]);
       if (
@@ -136,8 +141,10 @@ function buildResult(
 
   for (const used of usedStocks) {
     const stock = stocks[used.stockIndex];
-    const capacity = stock.length;
-    totalStockMeasure += capacity;
+    // Parts are laid out after the trimmed start of the stock
+    const trim = stock.trim ?? 0;
+    const capacity = usableLength(stock);
+    totalStockMeasure += stock.length;
     totalCost += stockCost(stock);
     const placements: Placement1D[] = [];
     const cuts: Cut1D[] = [];
@@ -146,14 +153,14 @@ function buildResult(
       const item = used.items[i];
       if (i > 0) {
         cuts.push({
-          x: item.offset - kerf,
+          x: trim + item.offset - kerf,
           kerf: kerf,
           step: i,
         });
       }
       placements.push({
         part_id: item.id,
-        x: item.offset,
+        x: trim + item.offset,
         length: item.size,
       });
       totalUsedMeasure += item.size;
@@ -168,12 +175,18 @@ function buildResult(
     const remnants: Segment1D[] = [];
     const waste: Segment1D[] = [];
 
+    // Trimmed ends are waste
+    if (trim > 0) {
+      waste.push({ x: 0, length: trim });
+      totalWasteMeasure += trim * 2;
+    }
+
     if (remaining > EPS) {
       // A final cut separates the last part from the leftover.
       // If the leftover is thinner than the kerf, the blade consumes all of it.
       const endCutLoss = Math.min(kerf, remaining);
       cuts.push({
-        x: used.usedCapacity,
+        x: trim + used.usedCapacity,
         kerf: kerf,
         step: cuts.length + 1,
       });
@@ -182,7 +195,7 @@ function buildResult(
       const leftover = Number((remaining - endCutLoss).toFixed(6));
       if (leftover > EPS) {
         const segment: Segment1D = {
-          x: used.usedCapacity + endCutLoss,
+          x: trim + used.usedCapacity + endCutLoss,
           length: leftover,
         };
         if (minRemnantLength > 0 && leftover >= minRemnantLength) {
@@ -195,6 +208,10 @@ function buildResult(
       }
     }
 
+    if (trim > 0) {
+      waste.push({ x: stock.length - trim, length: trim });
+    }
+
     // Cut loss is also considered waste
     totalWasteMeasure += cutLoss;
     cutCount += cuts.length;
@@ -202,7 +219,7 @@ function buildResult(
     resultStocks.push({
       stock_id: stock.id,
       index: used.index,
-      length: capacity,
+      length: stock.length,
       placements,
       cuts,
       remnants,

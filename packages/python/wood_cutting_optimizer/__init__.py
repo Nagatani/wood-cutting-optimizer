@@ -91,6 +91,7 @@ def optimize(data: Dict[str, Any]) -> OptimizationResult:
                 length=s.get("length"),
                 quantity=s.get("quantity", 1),
                 cost=s.get("cost"),
+                trim=s.get("trim", 0.0),
             )
             for s in input_data.get("stocks", [])
         ]
@@ -118,6 +119,7 @@ def optimize(data: Dict[str, Any]) -> OptimizationResult:
                 height=s.get("height"),
                 quantity=s.get("quantity", 1),
                 cost=s.get("cost"),
+                trim=s.get("trim", 0.0),
                 grain=s.get("grain", "none"),
             )
             for s in input_data.get("stocks", [])

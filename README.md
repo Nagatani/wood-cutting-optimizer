@@ -292,6 +292,13 @@ GitHub Actions（`.github/workflows/ci.yml`）で、上記すべてを push / Pu
 { "id": "saburoku", "width": 910, "height": 1820, "quantity": "unlimited", "cost": 2500 }
 ```
 
+### 端の切り落とし（trim）
+原材に `trim`（mm）を指定すると、2D は四辺、1D は両端からその幅を切り落としてから部材を配置します（工場出荷時の傷んだ端や、角材の割れた木口を落とす用途）。刃厚ぶんも `trim` に含めて指定してください。切り落とした帯は `waste` に出力され、`cuts` には含まれません。
+
+```json
+{ "id": "saburoku", "width": 910, "height": 1820, "quantity": "unlimited", "trim": 5 }
+```
+
 ### 入力検証
 - 仕様に反する入力（負や 0 の寸法、整数でない `quantity`、負の `kerf`、未知の `grain` / `dimension` など）はエラーになります（TypeScript: `Error`、Python: `ValueError`。メッセージは `Invalid input: ...`）。
 - `cost` を指定すると、使用原材の総コストが最小になる解を優先します。未指定の場合は面積（2D）／長さ（1D）をコストとみなします。

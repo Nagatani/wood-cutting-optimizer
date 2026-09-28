@@ -21,6 +21,7 @@ export interface Stock1D {
   length: number;
   quantity?: StockQuantity;
   cost?: number;
+  trim?: number; // Removed from each end before cutting (included in waste)
 }
 
 export interface Part1D {
@@ -36,6 +37,7 @@ export interface Stock2D {
   height: number;
   quantity?: StockQuantity;
   cost?: number;
+  trim?: number; // Removed from each edge before cutting (included in waste)
   grain?: GrainDirection;
 }
 

@@ -35,6 +35,7 @@
         "id": { "type": "string" },
         "length": { "type": "number", "exclusiveMinimum": 0 },
         "quantity": { "$ref": "#/definitions/StockQuantity" },
+        "trim": { "type": "number", "minimum": 0, "default": 0, "description": "Material removed from each edge before cutting (e.g. damaged factory edges), including blade loss. Trimmed strips are reported as waste." },
         "cost": { "type": "number", "minimum": 0, "description": "Price of one stock. The optimizer minimizes the total cost of used stocks; defaults to the stock area (2D) or length (1D)." }
       },
       "additionalProperties": false
@@ -58,6 +59,7 @@
         "width": { "type": "number", "exclusiveMinimum": 0 },
         "height": { "type": "number", "exclusiveMinimum": 0 },
         "quantity": { "$ref": "#/definitions/StockQuantity" },
+        "trim": { "type": "number", "minimum": 0, "default": 0, "description": "Material removed from each edge before cutting (e.g. damaged factory edges), including blade loss. Trimmed strips are reported as waste." },
         "cost": { "type": "number", "minimum": 0, "description": "Price of one stock. The optimizer minimizes the total cost of used stocks; defaults to the stock area (2D) or length (1D)." },
         "grain": { "$ref": "#/definitions/GrainDirection" }
       },

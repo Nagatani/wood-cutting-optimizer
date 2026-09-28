@@ -65,6 +65,14 @@ def validate_common(kerf: Any, min_remnant_size: Optional[MinRemnantSize]) -> No
                 _check_non_negative(f"min_remnant_size.{key}", v)
 
 
+def _check_trim(label: str, trim: Any, shortest: float) -> None:
+    if trim is None:
+        return
+    _check_non_negative(f"{label}.trim", trim)
+    if trim * 2 >= shortest:
+        _fail(f"{label}.trim leaves no usable material (trim {trim} on each edge of {shortest})")
+
+
 def validate_1d(stocks: List[Any], parts: List[Any], kerf: Any, min_remnant_size: Optional[MinRemnantSize]) -> None:
     """Validates 1D input against the constraints of specification/schema.json."""
     validate_common(kerf, min_remnant_size)
@@ -75,6 +83,7 @@ def validate_1d(stocks: List[Any], parts: List[Any], kerf: Any, min_remnant_size
         _check_stock_quantity(label, s.quantity)
         if s.cost is not None:
             _check_non_negative(f"{label}.cost", s.cost)
+        _check_trim(label, s.trim, s.length)
     for i, p in enumerate(parts):
         label = f"parts[{i}]"
         _check_id(label, p.id)
@@ -94,6 +103,7 @@ def validate_2d(stocks: List[Any], parts: List[Any], kerf: Any, min_remnant_size
         _check_stock_quantity(label, s.quantity)
         if s.cost is not None:
             _check_non_negative(f"{label}.cost", s.cost)
+        _check_trim(label, s.trim, min(s.width, s.height))
     for i, p in enumerate(parts):
         label = f"parts[{i}]"
         _check_id(label, p.id)

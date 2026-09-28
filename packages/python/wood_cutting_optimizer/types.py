@@ -21,6 +21,7 @@ class Stock1D:
     length: float
     quantity: StockQuantity = 1
     cost: Optional[float] = None
+    trim: float = 0.0  # Removed from each end before cutting (included in waste)
 
 
 @dataclass
@@ -38,6 +39,7 @@ class Stock2D:
     height: float
     quantity: StockQuantity = 1
     cost: Optional[float] = None
+    trim: float = 0.0  # Removed from each edge before cutting (included in waste)
     grain: GrainDirection = "none"
 
 

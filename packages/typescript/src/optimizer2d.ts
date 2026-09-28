@@ -82,6 +82,7 @@ interface StockPoolItem {
   id: string;
   width: number;
   height: number;
+  trim: number;
   grain: GrainDirection;
   cost: number;
   remainingQuantity: number;
@@ -93,6 +94,7 @@ interface ActiveStock2D {
   index: number;
   width: number;
   height: number;
+  trim: number;
   grain: GrainDirection;
   cost: number;
   freeRects: FreeRect[];
@@ -233,6 +235,7 @@ function runHeuristic(
     id: s.id,
     width: s.width,
     height: s.height,
+    trim: s.trim ?? 0,
     grain: s.grain ?? 'none',
     cost: s.cost ?? s.width * s.height,
     remainingQuantity: resolveStockQuantity(s.quantity),
@@ -282,14 +285,16 @@ function runHeuristic(
       index: globalStockIndex++,
       width: chosen.width,
       height: chosen.height,
+      trim: chosen.trim,
       grain: chosen.grain,
       cost: chosen.cost,
+      // The usable area inside the trimmed edges
       freeRects: [
         {
-          x: 0,
-          y: 0,
-          width: chosen.width,
-          height: chosen.height,
+          x: chosen.trim,
+          y: chosen.trim,
+          width: chosen.width - chosen.trim * 2,
+          height: chosen.height - chosen.trim * 2,
         },
       ],
       placements: [],
@@ -326,20 +331,22 @@ function chooseStock(stockPool: StockPoolItem[], part: ExpandedPart2D, rule: Sto
     const pool = stockPool[pIdx];
     if (pool.remainingQuantity <= 0) continue;
 
-    // Check if part can fit in this stock at all (including grain constraints)
+    // Check if part can fit in the usable (trimmed) area at all (including grain constraints)
+    const usableWidth = pool.width - pool.trim * 2;
+    const usableHeight = pool.height - pool.trim * 2;
     const canFitUnrotated =
-      part.width <= pool.width + EPS &&
-      part.height <= pool.height + EPS &&
+      part.width <= usableWidth + EPS &&
+      part.height <= usableHeight + EPS &&
       isOrientationAllowed(pool.grain, part.grain, part.canRotate, false);
 
     const canFitRotated =
-      part.height <= pool.width + EPS &&
-      part.width <= pool.height + EPS &&
+      part.height <= usableWidth + EPS &&
+      part.width <= usableHeight + EPS &&
       isOrientationAllowed(pool.grain, part.grain, part.canRotate, true);
 
     if (!canFitUnrotated && !canFitRotated) continue;
 
-    const area = pool.width * pool.height;
+    const area = usableWidth * usableHeight;
     let key: number;
     switch (rule) {
       case 'smallest':
@@ -397,7 +404,10 @@ function buildResult(
     totalPlacedCount += stock.placements.length;
 
     const remnants: Rect2D[] = [];
-    const waste: Rect2D[] = [];
+    const waste: Rect2D[] = trimStrips(stock);
+    for (const strip of waste) {
+      totalWasteMeasure += strip.width * strip.height;
+    }
 
     for (const rect of stock.freeRects) {
       if (rect.width <= 0 || rect.height <= 0) continue;
@@ -478,6 +488,21 @@ function buildResult(
       cutCount,
     },
   };
+}
+
+/**
+ * Strips removed by the edge trim (top, bottom, left, right), reported as waste.
+ */
+function trimStrips(stock: ActiveStock2D): Rect2D[] {
+  const t = stock.trim;
+  if (t <= 0) return [];
+  const innerHeight = stock.height - t * 2;
+  return [
+    { x: 0, y: 0, width: stock.width, height: t },
+    { x: 0, y: stock.height - t, width: stock.width, height: t },
+    { x: 0, y: t, width: t, height: innerHeight },
+    { x: stock.width - t, y: t, width: t, height: innerHeight },
+  ];
 }
 
 /**

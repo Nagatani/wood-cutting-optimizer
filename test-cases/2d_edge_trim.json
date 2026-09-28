@@ -1,0 +1,20 @@
+{
+  "name": "2D Edge Trim",
+  "description": "Damaged factory edges are trimmed before cutting; parts must stay inside the trimmed area",
+  "input": {
+    "dimension": "2D",
+    "kerf": 3.0,
+    "min_remnant_size": { "width": 150.0, "height": 150.0 },
+    "stocks": [
+      { "id": "saburoku", "width": 910.0, "height": 1820.0, "quantity": "unlimited", "trim": 5.0 }
+    ],
+    "parts": [
+      { "id": "door", "name": "扉", "width": 450.0, "height": 900.0, "quantity": 4, "can_rotate": false },
+      { "id": "shelf", "name": "棚板", "width": 300.0, "height": 450.0, "quantity": 3 }
+    ]
+  },
+  "expected": {
+    "all_placed": true,
+    "trim": 5.0
+  }
+}
