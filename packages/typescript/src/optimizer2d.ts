@@ -55,11 +55,18 @@ for (const sort of SORT_RULES) {
 }
 
 /**
- * Above this many part pieces, only the first REDUCED_HEURISTIC_COUNT heuristics
- * (the baseline sort order) are tried to keep runtime bounded.
+ * Heuristics are tried in list order, so larger inputs try only a prefix to keep runtime bounded:
+ * above LARGE_INPUT_PIECES part pieces only the baseline sort order (36 heuristics), and above
+ * HUGE_INPUT_PIECES only the baseline sort and fit rules (12 heuristics).
  */
 const LARGE_INPUT_PIECES = 500;
-const REDUCED_HEURISTIC_COUNT = FIT_RULES.length * SPLIT_RULES.length * STOCK_RULES.length;
+const HUGE_INPUT_PIECES = 2000;
+
+function heuristicCount(pieces: number): number {
+  if (pieces > HUGE_INPUT_PIECES) return SPLIT_RULES.length * STOCK_RULES.length;
+  if (pieces > LARGE_INPUT_PIECES) return FIT_RULES.length * SPLIT_RULES.length * STOCK_RULES.length;
+  return HEURISTICS_2D.length;
+}
 
 interface ExpandedPart2D {
   partId: string;
@@ -102,6 +109,9 @@ interface ActiveStock2D {
   cuts: Cut2D[];
   cutStepCount: number;
   cutLossArea: number; // Actual material removed by the blade
+  // Largest free width / height over all free rects (for skipping stocks that cannot fit a part)
+  maxFreeWidth: number;
+  maxFreeHeight: number;
 }
 
 interface PlacementFit {
@@ -187,10 +197,7 @@ export function optimize2D(input: InputRequest): OptimizationResult {
     }
   }
 
-  const heuristics =
-    expandedParts.length > LARGE_INPUT_PIECES
-      ? HEURISTICS_2D.slice(0, REDUCED_HEURISTIC_COUNT)
-      : HEURISTICS_2D;
+  const heuristics = HEURISTICS_2D.slice(0, heuristicCount(expandedParts.length));
 
   let best: { result: OptimizationResult; evaluation: SolutionEvaluation } | null = null;
   for (const heuristic of heuristics) {
@@ -253,6 +260,7 @@ function runHeuristic(
     // Search through existing open active stocks
     for (let sIdx = 0; sIdx < activeStocks.length; sIdx++) {
       const stock = activeStocks[sIdx];
+      if (!mayFit(stock, part)) continue;
       const fit = findBestFit(stock, part, heuristic.fit);
       if (fit !== null) {
         if (bestFit === null || fit.score < bestFit.score) {
@@ -301,6 +309,8 @@ function runHeuristic(
       cuts: [],
       cutStepCount: 0,
       cutLossArea: 0,
+      maxFreeWidth: chosen.width - chosen.trim * 2,
+      maxFreeHeight: chosen.height - chosen.trim * 2,
     };
 
     const fit = findBestFit(newStock, part, heuristic.fit);
@@ -316,6 +326,27 @@ function runHeuristic(
   }
 
   return { activeStocks, unplacedPartsMap };
+}
+
+/**
+ * Quick necessary condition for a part to fit anywhere in the stock (either orientation).
+ * Skipping stocks that fail it does not change the result, only the runtime.
+ */
+function mayFit(stock: ActiveStock2D, part: ExpandedPart2D): boolean {
+  const w = stock.maxFreeWidth + EPS;
+  const h = stock.maxFreeHeight + EPS;
+  return (part.width <= w && part.height <= h) || (part.height <= w && part.width <= h);
+}
+
+function updateMaxFreeSize(stock: ActiveStock2D): void {
+  let maxWidth = 0;
+  let maxHeight = 0;
+  for (const free of stock.freeRects) {
+    if (free.width > maxWidth) maxWidth = free.width;
+    if (free.height > maxHeight) maxHeight = free.height;
+  }
+  stock.maxFreeWidth = maxWidth;
+  stock.maxFreeHeight = maxHeight;
 }
 
 /**
@@ -614,7 +645,18 @@ function placePartInStock(
   splitRule: SplitRule2D
 ): void {
   const free = stock.freeRects.splice(fit.rectIndex, 1)[0];
+  splitFreeRect(stock, part, fit, kerf, splitRule, free);
+  updateMaxFreeSize(stock);
+}
 
+function splitFreeRect(
+  stock: ActiveStock2D,
+  part: ExpandedPart2D,
+  fit: PlacementFit,
+  kerf: number,
+  splitRule: SplitRule2D,
+  free: FreeRect
+): void {
   const pw = fit.partWidth;
   const ph = fit.partHeight;
   const px = free.x;

@@ -126,7 +126,7 @@ CI（`.github/workflows/ci.yml`）では Node 20/22、Python 3.9/3.13 のテス�
 - `data`（ジェネリクス）で呼び出し側のメタデータを透過的に保持。
 
 ### 2D（`optimizer2d`）
-- 部材を `quantity` 分展開し、次の4軸の組み合わせ（4×3×4×3 = 144通り）で貪欲法を実行する。部材が500個を超える場合は、先頭のソート順（面積）の36通りだけを試す。
+- 部材を `quantity` 分展開し、次の4軸の組み合わせ（4×3×4×3 = 144通り）で貪欲法を実行する。部材が500個を超える場合は先頭のソート順（面積）の36通り、2000個を超える場合はさらに先頭の空き矩形の選び方（BSSF）の12通りだけを試す（Python の実行時間を抑えるため）。
   - ソート順（降順）: `area`（同値なら長辺）/ `long-side` / `short-side` / `perimeter`
   - 空き矩形の選択: `best-short-side`（BSSF）/ `best-long-side`（BLSF）/ `best-area`（BAF）。使用中の全シートから選ぶ
   - ギロチン分割: `shorter-leftover-axis`（SLAS）/ `longer-leftover-axis` / `min-area` / `max-area`

@@ -40,10 +40,19 @@ HEURISTICS_2D: List[Tuple[str, str, str, str]] = [
     for stock in STOCK_RULES
 ]
 
-# Above this many part pieces, only the first REDUCED_HEURISTIC_COUNT heuristics
-# (the baseline sort order) are tried to keep runtime bounded.
+# Heuristics are tried in list order, so larger inputs try only a prefix to keep runtime bounded:
+# above LARGE_INPUT_PIECES part pieces only the baseline sort order (36 heuristics), and above
+# HUGE_INPUT_PIECES only the baseline sort and fit rules (12 heuristics).
 LARGE_INPUT_PIECES = 500
-REDUCED_HEURISTIC_COUNT = len(FIT_RULES) * len(SPLIT_RULES) * len(STOCK_RULES)
+HUGE_INPUT_PIECES = 2000
+
+
+def _heuristic_count(pieces: int) -> int:
+    if pieces > HUGE_INPUT_PIECES:
+        return len(SPLIT_RULES) * len(STOCK_RULES)
+    if pieces > LARGE_INPUT_PIECES:
+        return len(FIT_RULES) * len(SPLIT_RULES) * len(STOCK_RULES)
+    return len(HEURISTICS_2D)
 
 
 class FreeRect:
@@ -80,6 +89,9 @@ class ActiveStock2D:
         self.cuts: List[Cut2D] = []
         self.cut_step_count: int = 0
         self.cut_loss_area: float = 0.0  # Actual material removed by the blade
+        # Largest free width / height over all free rects (for skipping stocks that cannot fit a part)
+        self.max_free_width: float = width - trim * 2
+        self.max_free_height: float = height - trim * 2
 
 
 class PlacementFit:
@@ -122,46 +134,54 @@ def _sort_keys(part: Dict[str, Any], rule: str) -> Tuple[float, float]:
     return (part["width"] + part["height"], long_side)  # perimeter
 
 
-def _fit_score(free: FreeRect, pw: float, ph: float, rule: str) -> float:
-    leftover_w = free.width - pw
-    leftover_h = free.height - ph
-    if rule == "best-short-side":
-        return min(leftover_w, leftover_h)
-    if rule == "best-long-side":
-        return max(leftover_w, leftover_h)
-    return free.width * free.height - pw * ph  # best-area
+# Fit rules as integers for the hot loop in find_best_fit. Scores (lower is better):
+# best-short-side: min(leftover w, leftover h) / best-long-side: max(...) / best-area: leftover area
+_FIT_RULE_CODES = {"best-short-side": 0, "best-long-side": 1, "best-area": 2}
 
 
 def find_best_fit(stock: ActiveStock2D, part: Dict[str, Any], rule: str = "best-short-side") -> Optional[PlacementFit]:
     """Finds the best free rectangle in the stock for the part (lowest score wins)."""
-    best_fit: Optional[PlacementFit] = None
+    # This is the hot path of the optimizer, so the orientation checks are hoisted
+    # and the fit scores inlined. Semantics match the TypeScript findBestFit exactly:
+    # rects in order, unrotated before rotated, strictly lower score wins.
+    pw = part["width"]
+    ph = part["height"]
+    allow_unrotated = is_orientation_allowed(stock.grain, part["grain"], part["can_rotate"], False)
+    allow_rotated = is_orientation_allowed(stock.grain, part["grain"], part["can_rotate"], True)
+    rule_code = _FIT_RULE_CODES[rule]
+
+    best: Optional[Tuple[int, bool, float, float, float]] = None
     min_score = float("inf")
 
-    orientations = (
-        (False, part["width"], part["height"]),
-        (True, part["height"], part["width"]),
-    )
-
     for i, free in enumerate(stock.free_rects):
-        # Try unrotated, then rotated (90 degrees)
-        for rotated, pw, ph in orientations:
-            if (
-                pw <= free.width + EPS
-                and ph <= free.height + EPS
-                and is_orientation_allowed(stock.grain, part["grain"], part["can_rotate"], rotated)
-            ):
-                score = _fit_score(free, pw, ph, rule)
-                if score < min_score:
-                    min_score = score
-                    best_fit = PlacementFit(
-                        rect_index=i,
-                        rotated=rotated,
-                        part_width=pw,
-                        part_height=ph,
-                        score=score,
-                    )
+        fw = free.width
+        fh = free.height
+        max_w = fw + EPS
+        max_h = fh + EPS
+        if allow_unrotated and pw <= max_w and ph <= max_h:
+            if rule_code == 0:
+                score = min(fw - pw, fh - ph)
+            elif rule_code == 1:
+                score = max(fw - pw, fh - ph)
+            else:
+                score = fw * fh - pw * ph
+            if score < min_score:
+                min_score = score
+                best = (i, False, pw, ph, score)
+        if allow_rotated and ph <= max_w and pw <= max_h:
+            if rule_code == 0:
+                score = min(fw - ph, fh - pw)
+            elif rule_code == 1:
+                score = max(fw - ph, fh - pw)
+            else:
+                score = fw * fh - ph * pw
+            if score < min_score:
+                min_score = score
+                best = (i, True, ph, pw, score)
 
-    return best_fit
+    if best is None:
+        return None
+    return PlacementFit(rect_index=best[0], rotated=best[1], part_width=best[2], part_height=best[3], score=best[4])
 
 
 def _should_split_horizontal(pw: float, ph: float, leftover_w: float, leftover_h: float, rule: str) -> bool:
@@ -186,7 +206,19 @@ def place_part_in_stock(
     split_rule: str = "shorter-leftover-axis",
 ) -> None:
     free = stock.free_rects.pop(fit.rect_index)
+    _split_free_rect(stock, part, fit, kerf, split_rule, free)
+    stock.max_free_width = max((r.width for r in stock.free_rects), default=0.0)
+    stock.max_free_height = max((r.height for r in stock.free_rects), default=0.0)
 
+
+def _split_free_rect(
+    stock: ActiveStock2D,
+    part: Dict[str, Any],
+    fit: PlacementFit,
+    kerf: float,
+    split_rule: str,
+    free: FreeRect,
+) -> None:
     pw = fit.part_width
     ph = fit.part_height
     px = free.x
@@ -372,7 +404,14 @@ def _run_heuristic(
         best_stock_idx = -1
         best_fit: Optional[PlacementFit] = None
 
+        pw = part["width"]
+        ph = part["height"]
         for s_idx, stock in enumerate(active_stocks):
+            # Quick necessary condition (either orientation); skipping does not change the result
+            w = stock.max_free_width + EPS
+            h = stock.max_free_height + EPS
+            if not ((pw <= w and ph <= h) or (ph <= w and pw <= h)):
+                continue
             fit = find_best_fit(stock, part, fit_rule)
             if fit is not None:
                 if best_fit is None or fit.score < best_fit.score:
@@ -572,11 +611,7 @@ def optimize_2d(
                 "area": float(p.width) * float(p.height),
             })
 
-    heuristics = (
-        HEURISTICS_2D[:REDUCED_HEURISTIC_COUNT]
-        if len(expanded_parts) > LARGE_INPUT_PIECES
-        else HEURISTICS_2D
-    )
+    heuristics = HEURISTICS_2D[:_heuristic_count(len(expanded_parts))]
 
     best: Optional[Tuple[OptimizationResult, SolutionEvaluation]] = None
     for heuristic in heuristics:
