@@ -18,6 +18,8 @@
 ```text
 .github/workflows/ci.yml       # CI（TS テスト / Python テスト / 言語間パリティ検証）
 scripts/check_parity.py        # test-cases/ に対して TS と Python の出力（JSON と SVG）が一致するか検証
+scripts/validate_schema.py     # test-cases/ の入力と TS / Python の出力が schema.json に準拠するか検証（要 jsonschema）
+CHANGELOG.md                   # 変更履歴（TS / Python 共通のバージョン）
 docs/example-*.svg             # README 掲載用のカット図面サンプル（test-cases から生成）
 specification/schema.json      # 入出力の JSON Schema（言語共通の正）
 test-cases/*.json              # 言語共通の検証シナリオ（{ name, description, input, expected }）
@@ -78,10 +80,15 @@ python -m wood_cutting_optimizer ../../test-cases/2d_guillotine.json   # CLI 動
 
 ```bash
 (cd packages/typescript && npm run build)
-python scripts/check_parity.py   # test-cases/*.json について TS と Python の出力 JSON を比較
+python scripts/check_parity.py      # test-cases/*.json について TS と Python の出力（JSON・SVG）を比較
+pip install jsonschema              # 開発時のみ（ライブラリ本体の依存ではない）
+python scripts/validate_schema.py   # test-cases の入力と両言語の出力が schema.json に準拠するか検証
 ```
 
-CI（`.github/workflows/ci.yml`）では Node 20/22、Python 3.9/3.13 のテストとこのパリティ検証を実行します。
+CI（`.github/workflows/ci.yml`）では Node 20/22、Python 3.9/3.13 のテスト、パリティ検証、schema 準拠の検証を実行します。CLI の挙動（終了コード: 正常 0、入力エラー 1、引数エラー 2）は `tests/cli.test.ts` / `tests/test_cli.py` で両言語同じ内容を検証しています。
+
+### バージョン
+- TS（`package.json` / `package-lock.json`）と Python（`pyproject.toml` / `__init__.py` の `__version__`）は同じバージョン番号にそろえ、変更は `CHANGELOG.md` に記録してください。
 
 ## 必須ルール
 

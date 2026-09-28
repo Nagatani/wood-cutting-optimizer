@@ -1,6 +1,6 @@
 {
   "name": "wood-cutting-optimizer",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Zero-dependency 1D and 2D wood cutting optimization core library",
   "author": "wood-cutting-optimizer contributors",
   "license": "MIT",

@@ -29,7 +29,7 @@ from .binpacking import (
     bin_pack_1d,
 )
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 __all__ = [
     "optimize",
     "optimize_1d",
