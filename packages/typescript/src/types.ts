@@ -7,6 +7,9 @@ export type Dimension = '1D' | '2D';
 
 export type GrainDirection = 'none' | 'length' | 'width';
 
+/** Number of available stocks, or 'unlimited' to use as many as needed. */
+export type StockQuantity = number | 'unlimited';
+
 export interface MinRemnantSize {
   length?: number;
   width?: number;
@@ -16,7 +19,7 @@ export interface MinRemnantSize {
 export interface Stock1D {
   id: string;
   length: number;
-  quantity?: number;
+  quantity?: StockQuantity;
   cost?: number;
 }
 
@@ -31,7 +34,7 @@ export interface Stock2D {
   id: string;
   width: number;
   height: number;
-  quantity?: number;
+  quantity?: StockQuantity;
   cost?: number;
   grain?: GrainDirection;
 }

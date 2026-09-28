@@ -13,7 +13,7 @@ from .types import (
     UnplacedPart,
     GrainDirection,
 )
-from .validate import validate_2d
+from .validate import validate_2d, resolve_stock_quantity
 from .evaluation import SolutionEvaluation, is_better_evaluation
 
 # Tolerance for floating-point comparisons (e.g. 0.1 + 0.2 fitting into 0.3).
@@ -343,7 +343,7 @@ def _run_heuristic(
             "height": float(s.height),
             "grain": s.grain or "none",
             "cost": float(s.cost) if s.cost is not None else float(s.width) * float(s.height),
-            "remaining_quantity": s.quantity if s.quantity is not None else 1,
+            "remaining_quantity": resolve_stock_quantity(s.quantity),
         })
 
     active_stocks: List[ActiveStock2D] = []

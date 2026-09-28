@@ -121,6 +121,25 @@ class TestRemnantOrientation(unittest.TestCase):
         self.assertEqual(len(stock.waste), 1)
 
 
+class TestUnlimitedStock(unittest.TestCase):
+    def test_unlimited_2d(self):
+        with open(TEST_CASES_DIR / "2d_unlimited_stock.json", "r", encoding="utf-8") as f:
+            case_data = json.load(f)
+        result = optimize(case_data["input"])
+        self.assertEqual(len(result.unplaced_parts), 0)
+        self.assertLessEqual(result.summary.stock_count_used, case_data["expected"]["max_stocks_used"])
+
+    def test_unlimited_1d(self):
+        result = optimize({
+            "dimension": "1D",
+            "kerf": 3,
+            "stocks": [{"id": "s", "length": 1820, "quantity": "unlimited"}],
+            "parts": [{"id": "a", "length": 900, "quantity": 20}],
+        })
+        self.assertEqual(len(result.unplaced_parts), 0)
+        self.assertEqual(result.summary.stock_count_used, 10)
+
+
 class TestInputHandling(unittest.TestCase):
     VALID = {
         "dimension": "1D",
@@ -139,6 +158,8 @@ class TestInputHandling(unittest.TestCase):
             "zero stock length": {**self.VALID, "stocks": [{"id": "s", "length": 0}]},
             "fractional quantity": {**self.VALID, "parts": [{"id": "a", "length": 10, "quantity": 2.5}]},
             "missing id": {**self.VALID, "parts": [{"length": 10}]},
+            "unlimited part quantity": {**self.VALID, "parts": [{"id": "a", "length": 10, "quantity": "unlimited"}]},
+            "unknown stock quantity string": {**self.VALID, "stocks": [{"id": "s", "length": 100, "quantity": "many"}]},
             "stocks not an array": {**self.VALID, "stocks": None},
             "invalid grain": {
                 "dimension": "2D",

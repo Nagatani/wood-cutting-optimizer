@@ -254,6 +254,13 @@ GitHub Actions（`.github/workflows/ci.yml`）で、上記すべてを push / Pu
   - `waste`: 廃棄余白矩形リスト
 - `unplaced_parts`: 在庫不足等で収容しきれなかった部材のリスト
 
+### 原材の数量無制限（購入計画）
+原材（`stocks`）の `quantity` に `"unlimited"` を指定すると、必要なだけ原材を使って全部材を配置します。「何枚買えばよいか」を求める用途に使えます（部材の `quantity` には指定できません）。
+
+```json
+{ "id": "saburoku", "width": 910, "height": 1820, "quantity": "unlimited", "cost": 2500 }
+```
+
 ### 入力検証
 - 仕様に反する入力（負や 0 の寸法、整数でない `quantity`、負の `kerf`、未知の `grain` / `dimension` など）はエラーになります（TypeScript: `Error`、Python: `ValueError`。メッセージは `Invalid input: ...`）。
 - `cost` を指定すると、使用原材の総コストが最小になる解を優先します。未指定の場合は面積（2D）／長さ（1D）をコストとみなします。

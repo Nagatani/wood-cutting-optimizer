@@ -1,4 +1,4 @@
-import { InputRequest } from './types.js';
+import { InputRequest, StockQuantity } from './types.js';
 
 const GRAIN_DIRECTIONS: readonly string[] = ['none', 'length', 'width'];
 
@@ -23,6 +23,18 @@ function checkQuantity(label: string, value: unknown): void {
   if (typeof value !== 'number' || !Number.isInteger(value) || value < 1) {
     fail(`${label}.quantity must be an integer >= 1 (got ${value})`);
   }
+}
+
+function checkStockQuantity(label: string, value: unknown): void {
+  if (value === 'unlimited') return;
+  checkQuantity(label, value);
+}
+
+/**
+ * Resolves a stock quantity to a number (Infinity for 'unlimited', 1 when omitted).
+ */
+export function resolveStockQuantity(quantity: StockQuantity | undefined): number {
+  return quantity === 'unlimited' ? Infinity : quantity ?? 1;
 }
 
 function checkGrain(label: string, value: unknown): void {
@@ -71,7 +83,7 @@ export function validateInput(input: InputRequest): void {
       checkPositive(`${label}.height`, s.height);
       checkGrain(label, s.grain);
     }
-    checkQuantity(label, s.quantity);
+    checkStockQuantity(label, s.quantity);
     if (s.cost !== undefined) checkNonNegative(`${label}.cost`, s.cost);
   });
 

@@ -31,6 +31,19 @@ def _check_quantity(label: str, value: Any) -> None:
         _fail(f"{label}.quantity must be an integer >= 1 (got {value})")
 
 
+def _check_stock_quantity(label: str, value: Any) -> None:
+    if value == "unlimited":
+        return
+    _check_quantity(label, value)
+
+
+def resolve_stock_quantity(quantity: Any) -> float:
+    """Resolves a stock quantity to a number (math.inf for "unlimited", 1 when omitted)."""
+    if quantity == "unlimited":
+        return math.inf
+    return quantity if quantity is not None else 1
+
+
 def _check_grain(label: str, value: Any) -> None:
     if value is None:
         return
@@ -59,7 +72,7 @@ def validate_1d(stocks: List[Any], parts: List[Any], kerf: Any, min_remnant_size
         label = f"stocks[{i}]"
         _check_id(label, s.id)
         _check_positive(f"{label}.length", s.length)
-        _check_quantity(label, s.quantity)
+        _check_stock_quantity(label, s.quantity)
         if s.cost is not None:
             _check_non_negative(f"{label}.cost", s.cost)
     for i, p in enumerate(parts):
@@ -78,7 +91,7 @@ def validate_2d(stocks: List[Any], parts: List[Any], kerf: Any, min_remnant_size
         _check_positive(f"{label}.width", s.width)
         _check_positive(f"{label}.height", s.height)
         _check_grain(label, s.grain)
-        _check_quantity(label, s.quantity)
+        _check_stock_quantity(label, s.quantity)
         if s.cost is not None:
             _check_non_negative(f"{label}.cost", s.cost)
     for i, p in enumerate(parts):

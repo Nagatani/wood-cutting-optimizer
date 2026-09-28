@@ -19,7 +19,7 @@ from .binpacking import (
     BinPacking1DResult,
     bin_pack_1d,
 )
-from .validate import validate_1d
+from .validate import validate_1d, resolve_stock_quantity
 from .evaluation import SolutionEvaluation, is_better_evaluation
 
 EPS = 1e-9
@@ -39,7 +39,7 @@ def _downsize_stocks(stocks: List[Stock1D], pack_result: BinPacking1DResult) -> 
     Swaps each used stock for the cheapest remaining stock type that still holds its parts
     (e.g. a 3m stock holding 1.5m of parts becomes a 2m stock when one is available and cheaper).
     """
-    remaining = [s.quantity if s.quantity is not None else 1 for s in stocks]
+    remaining = [resolve_stock_quantity(s.quantity) for s in stocks]
     used_stocks: List[Dict[str, Any]] = []
     for packed_bin in pack_result.bins:
         stock_index = packed_bin.data
@@ -199,7 +199,7 @@ def optimize_1d(
         BinDefinition(
             id=s.id,
             capacity=float(s.length),
-            quantity=s.quantity if s.quantity is not None else 1,
+            quantity=resolve_stock_quantity(s.quantity),
             cost=_stock_cost(s),
             data=i,
         )

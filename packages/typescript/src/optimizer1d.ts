@@ -17,7 +17,7 @@ import {
   BinSelection1D,
   PackingStrategy1D,
 } from './binpacking/index.js';
-import { validateInput } from './validate.js';
+import { validateInput, resolveStockQuantity } from './validate.js';
 import { isBetterEvaluation, SolutionEvaluation } from './evaluation.js';
 
 const EPS = 1e-9;
@@ -45,7 +45,7 @@ export function optimize1D(input: InputRequest): OptimizationResult {
   const bins: BinDefinition<number>[] = stocks.map((s, i) => ({
     id: s.id,
     capacity: s.length,
-    quantity: s.quantity ?? 1,
+    quantity: resolveStockQuantity(s.quantity),
     cost: stockCost(s),
     data: i,
   }));
@@ -81,7 +81,7 @@ function stockCost(stock: Stock1D): number {
  * (e.g. a 3m stock holding 1.5m of parts becomes a 2m stock when one is available and cheaper).
  */
 function downsizeStocks(stocks: Stock1D[], packResult: BinPacking1DResult<number, Part1D>): UsedStock1D[] {
-  const remaining = stocks.map((s) => s.quantity ?? 1);
+  const remaining = stocks.map((s) => resolveStockQuantity(s.quantity));
   const usedStocks: UsedStock1D[] = packResult.bins.map((bin) => {
     const stockIndex = bin.data as number;
     remaining[stockIndex] -= 1;

@@ -1,9 +1,11 @@
 from __future__ import annotations
 from dataclasses import dataclass, field, asdict
-from typing import List, Optional, Literal, Dict, Any
+from typing import List, Optional, Literal, Dict, Any, Union
 
 Dimension = Literal["1D", "2D"]
 GrainDirection = Literal["none", "length", "width"]
+# Number of available stocks, or "unlimited" to use as many as needed.
+StockQuantity = Union[int, Literal["unlimited"]]
 
 
 @dataclass
@@ -17,7 +19,7 @@ class MinRemnantSize:
 class Stock1D:
     id: str
     length: float
-    quantity: int = 1
+    quantity: StockQuantity = 1
     cost: Optional[float] = None
 
 
@@ -34,7 +36,7 @@ class Stock2D:
     id: str
     width: float
     height: float
-    quantity: int = 1
+    quantity: StockQuantity = 1
     cost: Optional[float] = None
     grain: GrainDirection = "none"
 

@@ -10,7 +10,7 @@ import {
   UnplacedPart,
   GrainDirection,
 } from './types.js';
-import { validateInput } from './validate.js';
+import { validateInput, resolveStockQuantity } from './validate.js';
 import { isBetterEvaluation, SolutionEvaluation } from './evaluation.js';
 
 /** Tolerance for floating-point comparisons (e.g. 0.1 + 0.2 fitting into 0.3). */
@@ -232,7 +232,7 @@ function runHeuristic(
     height: s.height,
     grain: s.grain ?? 'none',
     cost: s.cost ?? s.width * s.height,
-    remainingQuantity: s.quantity ?? 1,
+    remainingQuantity: resolveStockQuantity(s.quantity),
   }));
 
   const activeStocks: ActiveStock2D[] = [];

@@ -132,6 +132,26 @@ describe('Remnant orientation', () => {
   });
 });
 
+describe('Unlimited stock quantity', () => {
+  it('should use as many sheets as needed (2D)', () => {
+    const caseData = JSON.parse(fs.readFileSync(path.join(testCasesDir, '2d_unlimited_stock.json'), 'utf-8'));
+    const result = optimize(caseData.input);
+    assert.strictEqual(result.unplaced_parts.length, 0);
+    assert.ok(result.summary.stock_count_used <= caseData.expected.max_stocks_used);
+  });
+
+  it('should use as many stocks as needed (1D)', () => {
+    const result = optimize({
+      dimension: '1D',
+      kerf: 3,
+      stocks: [{ id: 's', length: 1820, quantity: 'unlimited' }],
+      parts: [{ id: 'a', length: 900, quantity: 20 }],
+    });
+    assert.strictEqual(result.unplaced_parts.length, 0);
+    assert.strictEqual(result.summary.stock_count_used, 10);
+  });
+});
+
 describe('Input handling', () => {
   const valid: InputRequest = {
     dimension: '1D',
@@ -150,6 +170,8 @@ describe('Input handling', () => {
     ['zero stock length', { ...valid, stocks: [{ id: 's', length: 0 }] }],
     ['fractional quantity', { ...valid, parts: [{ id: 'a', length: 10, quantity: 2.5 }] }],
     ['missing id', { ...valid, parts: [{ length: 10 }] }],
+    ['unlimited part quantity', { ...valid, parts: [{ id: 'a', length: 10, quantity: 'unlimited' }] }],
+    ['unknown stock quantity string', { ...valid, stocks: [{ id: 's', length: 100, quantity: 'many' }] }],
     ['stocks not an array', { ...valid, stocks: null }],
     [
       'invalid grain',

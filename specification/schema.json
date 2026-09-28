@@ -4,6 +4,14 @@
   "title": "WoodCuttingOptimizationSchema",
   "description": "Standard input and output schema for 1D/2D wood cutting optimization",
   "definitions": {
+    "StockQuantity": {
+      "oneOf": [
+        { "type": "integer", "minimum": 1 },
+        { "const": "unlimited" }
+      ],
+      "default": 1,
+      "description": "Number of available stocks. \"unlimited\" lets the optimizer use as many as needed (e.g. to plan a purchase)."
+    },
     "GrainDirection": {
       "type": "string",
       "enum": ["none", "length", "width"],
@@ -26,7 +34,7 @@
       "properties": {
         "id": { "type": "string" },
         "length": { "type": "number", "exclusiveMinimum": 0 },
-        "quantity": { "type": "integer", "minimum": 1, "default": 1 },
+        "quantity": { "$ref": "#/definitions/StockQuantity" },
         "cost": { "type": "number", "minimum": 0, "description": "Price of one stock. The optimizer minimizes the total cost of used stocks; defaults to the stock area (2D) or length (1D)." }
       },
       "additionalProperties": false
@@ -49,7 +57,7 @@
         "id": { "type": "string" },
         "width": { "type": "number", "exclusiveMinimum": 0 },
         "height": { "type": "number", "exclusiveMinimum": 0 },
-        "quantity": { "type": "integer", "minimum": 1, "default": 1 },
+        "quantity": { "$ref": "#/definitions/StockQuantity" },
         "cost": { "type": "number", "minimum": 0, "description": "Price of one stock. The optimizer minimizes the total cost of used stocks; defaults to the stock area (2D) or length (1D)." },
         "grain": { "$ref": "#/definitions/GrainDirection" }
       },

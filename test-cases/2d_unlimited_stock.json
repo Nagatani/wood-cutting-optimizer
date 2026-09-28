@@ -1,0 +1,20 @@
+{
+  "name": "2D Purchase Planning with Unlimited Stock",
+  "description": "With quantity \"unlimited\", the optimizer uses as many sheets as needed so every part is placed",
+  "input": {
+    "dimension": "2D",
+    "kerf": 3.0,
+    "min_remnant_size": { "width": 150.0, "height": 150.0 },
+    "stocks": [
+      { "id": "saburoku", "width": 910.0, "height": 1820.0, "quantity": "unlimited", "grain": "length" }
+    ],
+    "parts": [
+      { "id": "side", "name": "側板", "width": 450.0, "height": 1800.0, "quantity": 4, "can_rotate": false, "grain": "length" },
+      { "id": "shelf", "name": "棚板", "width": 600.0, "height": 400.0, "quantity": 6, "can_rotate": true }
+    ]
+  },
+  "expected": {
+    "all_placed": true,
+    "max_stocks_used": 4
+  }
+}
