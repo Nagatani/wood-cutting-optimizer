@@ -59,6 +59,20 @@ export interface InputRequest {
   parts: (Part1D | Part2D)[];
 }
 
+/** A 1D request; `optimize()` returns an OptimizationResult1D for it. */
+export interface InputRequest1D extends InputRequest {
+  dimension: '1D';
+  stocks: Stock1D[];
+  parts: Part1D[];
+}
+
+/** A 2D request; `optimize()` returns an OptimizationResult2D for it. */
+export interface InputRequest2D extends InputRequest {
+  dimension: '2D';
+  stocks: Stock2D[];
+  parts: Part2D[];
+}
+
 export interface Cut1D {
   x: number;
   kerf: number;
@@ -151,3 +165,26 @@ export interface OptimizationResult {
   stocks: (StockResult1D | StockResult2D)[];
   unplaced_parts: UnplacedPart[];
 }
+
+export interface OptimizationResult1D extends OptimizationResult {
+  dimension: '1D';
+  stocks: StockResult1D[];
+}
+
+export interface OptimizationResult2D extends OptimizationResult {
+  dimension: '2D';
+  stocks: StockResult2D[];
+}
+
+/**
+ * Result type of `optimize()` for an input type: OptimizationResult1D / OptimizationResult2D
+ * when the dimension is known at compile time (also through the `{ input }` wrapper),
+ * their union for `any` input, and OptimizationResult otherwise.
+ */
+export type OptimizationResultFor<T> = 0 extends 1 & T // true only for `any`
+  ? OptimizationResult1D | OptimizationResult2D
+  : T extends { dimension: '1D' } | { input: { dimension: '1D' } }
+    ? OptimizationResult1D
+    : T extends { dimension: '2D' } | { input: { dimension: '2D' } }
+      ? OptimizationResult2D
+      : OptimizationResult;

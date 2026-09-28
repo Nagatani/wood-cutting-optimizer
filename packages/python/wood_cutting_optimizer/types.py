@@ -155,7 +155,7 @@ class UnplacedPart:
 class OptimizationResult:
     dimension: Dimension
     summary: Summary
-    stocks: List[Any]  # StockResult1D or StockResult2D
+    stocks: List[Union[StockResult1D, StockResult2D]]  # StockResult1D for 1D, StockResult2D for 2D
     unplaced_parts: List[UnplacedPart]
 
     def to_dict(self) -> Dict[str, Any]:

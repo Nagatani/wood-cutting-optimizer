@@ -103,6 +103,8 @@ console.log(`歩留まり: ${(result.summary.yield_rate * 100).toFixed(1)}%`);
 console.log(`使用板数: ${result.summary.stock_count_used} 枚`);
 ```
 
+`optimize()` の戻り値の型は入力の `dimension` に応じて決まります（`'2D'` なら `OptimizationResult2D` で、`result.stocks[0].width` などに型キャストなしでアクセスできます）。`JSON.parse` した入力（`any`）では `OptimizationResult1D | OptimizationResult2D` になり、`result.dimension` で絞り込めます。
+
 ---
 
 ## クイックスタート (Python)

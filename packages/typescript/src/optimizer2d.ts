@@ -1,6 +1,6 @@
 import {
   InputRequest,
-  OptimizationResult,
+  OptimizationResult2D,
   Stock2D,
   Part2D,
   StockResult2D,
@@ -180,7 +180,7 @@ function sortKeys(part: ExpandedPart2D, rule: SortRule2D): [number, number] {
  * 2D Guillotine Bin Packing Optimizer with Kerf, Grain, and Remnant constraints.
  * Runs several greedy heuristics and returns the best solution (see evaluation.ts).
  */
-export function optimize2D(input: InputRequest): OptimizationResult {
+export function optimize2D(input: InputRequest): OptimizationResult2D {
   validateInput(input);
   const kerf = input.kerf ?? 0;
   const minRemnantWidth = input.min_remnant_size?.width ?? 0;
@@ -205,7 +205,7 @@ export function optimize2D(input: InputRequest): OptimizationResult {
 
   const heuristics = HEURISTICS_2D.slice(0, heuristicCount(expandedParts.length));
 
-  let best: { result: OptimizationResult; evaluation: SolutionEvaluation } | null = null;
+  let best: { result: OptimizationResult2D; evaluation: SolutionEvaluation } | null = null;
   for (const heuristic of heuristics) {
     const activeStocksAndUnplaced = runHeuristic(input.stocks as Stock2D[], expandedParts, kerf, heuristic);
     const candidate = buildResult(
@@ -513,7 +513,7 @@ function buildResult(
   totalPartsCount: number,
   minRemnantWidth: number,
   minRemnantHeight: number
-): { result: OptimizationResult; evaluation: SolutionEvaluation } {
+): { result: OptimizationResult2D; evaluation: SolutionEvaluation } {
   const resultStocks: StockResult2D[] = [];
   let totalStockMeasure = 0;
   let totalUsedMeasure = 0;
@@ -591,7 +591,7 @@ function buildResult(
 
   const yieldRate = totalStockMeasure > 0 ? totalUsedMeasure / totalStockMeasure : 0;
 
-  const result: OptimizationResult = {
+  const result: OptimizationResult2D = {
     dimension: '2D',
     summary: {
       stock_count_used: resultStocks.length,

@@ -1,6 +1,6 @@
 import {
   InputRequest,
-  OptimizationResult,
+  OptimizationResult1D,
   Stock1D,
   Part1D,
   StockResult1D,
@@ -37,7 +37,7 @@ interface UsedStock1D {
   usedCapacity: number; // End offset of the last item
 }
 
-export function optimize1D(input: InputRequest): OptimizationResult {
+export function optimize1D(input: InputRequest): OptimizationResult1D {
   validateInput(input);
   const kerf = input.kerf ?? 0;
   const minRemnantLength = input.min_remnant_size?.length ?? 0;
@@ -58,7 +58,7 @@ export function optimize1D(input: InputRequest): OptimizationResult {
     data: p,
   }));
 
-  let best: { result: OptimizationResult; evaluation: SolutionEvaluation } | null = null;
+  let best: { result: OptimizationResult1D; evaluation: SolutionEvaluation } | null = null;
   for (const strategy of STRATEGIES) {
     for (const binSelection of BIN_SELECTIONS) {
       const packResult = binPack1D(bins, items, { itemSpacing: kerf, strategy, binSelection });
@@ -129,7 +129,7 @@ function buildResult(
   packResult: BinPacking1DResult<number, Part1D>,
   kerf: number,
   minRemnantLength: number
-): { result: OptimizationResult; evaluation: SolutionEvaluation } {
+): { result: OptimizationResult1D; evaluation: SolutionEvaluation } {
   const resultStocks: StockResult1D[] = [];
   let totalStockMeasure = 0;
   let totalUsedMeasure = 0;
@@ -238,7 +238,7 @@ function buildResult(
 
   const yieldRate = totalStockMeasure > 0 ? totalUsedMeasure / totalStockMeasure : 0;
 
-  const result: OptimizationResult = {
+  const result: OptimizationResult1D = {
     dimension: '1D',
     summary: {
       stock_count_used: resultStocks.length,

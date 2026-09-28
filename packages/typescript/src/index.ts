@@ -5,14 +5,16 @@ export { optimize2D } from './optimizer2d.js';
 export { validateInput } from './validate.js';
 export { renderSvg } from './svg.js';
 
-import { InputRequest, OptimizationResult } from './types.js';
+import { InputRequest, OptimizationResult, OptimizationResultFor } from './types.js';
 import { optimize1D } from './optimizer1d.js';
 import { optimize2D } from './optimizer2d.js';
 
 /**
  * Main optimization entry point. Dispatches to 1D or 2D optimizer based on input dimension.
  * Also accepts the test-case wrapper form `{ input: InputRequest }`.
+ * The result type follows the input's `dimension` when it is known at compile time.
  */
+export function optimize<T extends InputRequest | { input: InputRequest }>(data: T): OptimizationResultFor<T>;
 export function optimize(data: InputRequest | { input: InputRequest }): OptimizationResult {
   const input: InputRequest =
     data !== null && typeof data === 'object' && 'input' in data ? data.input : data;
