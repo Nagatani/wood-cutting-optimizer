@@ -1,0 +1,31 @@
+[package]
+name = "wood-cutting-optimizer"
+version = "0.2.0"
+edition = "2021"
+rust-version = "1.70"
+description = "Zero-dependency 1D and 2D wood cutting optimization core library (Rust / WebAssembly)"
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/Nagatani/wood-cutting-optimizer"
+homepage = "https://github.com/Nagatani/wood-cutting-optimizer"
+keywords = ["woodworking", "cutting-stock", "bin-packing", "guillotine", "wasm"]
+categories = ["algorithms", "wasm"]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "wood-cutting-optimizer"
+path = "src/main.rs"
+
+[features]
+# WebAssembly bindings (wasm-pack build --features wasm). The core library has no dependencies.
+wasm = ["dep:wasm-bindgen", "dep:js-sys"]
+
+[dependencies]
+wasm-bindgen = { version = "0.2", optional = true }
+js-sys = { version = "0.3", optional = true }
+
+[profile.release]
+lto = true
+opt-level = 3

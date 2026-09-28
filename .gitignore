@@ -21,3 +21,7 @@ Thumbs.db
 .idea/
 *.swp
 *.log
+
+# Rust
+packages/rust/target/
+packages/rust/pkg*/
