@@ -214,7 +214,8 @@ print(f"平均充填率: {result.summary.average_utilization * 100:.1f}%")
 ### TypeScript テスト (Node.js 組み込み `node:test`)
 ```bash
 cd packages/typescript
-npm test
+npm install
+npm test   # dist/ をクリーン → ビルドしてからテストを実行
 ```
 
 ### Python テスト (標準 `unittest`)

@@ -46,10 +46,10 @@ TS と Python のファイルは 1 対 1 で対応しています（`optimizer2d
 cd packages/typescript
 npm install
 npm run build     # tsc → dist/ に出力
-npm test          # node --test dist/tests/*.test.js
+npm test          # pretest で dist/ を削除・再ビルドしてから node --test dist/tests/*.test.js
 ```
 
-- テストは **ビルド後の `dist/` に対して実行** されます。ソースを変更したら必ず `npm run build` してから `npm test` してください。
+- テストはビルド後の `dist/` に対して実行されますが、`npm test` の `pretest` で毎回 `clean` → `build` されるため、古いビルド成果物でテストが走ることはありません。
 - ESM（`"type": "module"`、`module: NodeNext`）のため、相対 import には **`.js` 拡張子が必須** です（例: `from './types.js'`）。
 - `strict: true` です。
 

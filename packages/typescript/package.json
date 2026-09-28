@@ -20,6 +20,8 @@
   },
   "scripts": {
     "build": "tsc",
+    "clean": "node -e \"fs.rmSync('dist',{recursive:true,force:true})\"",
+    "pretest": "npm run clean && npm run build",
     "test": "node --test dist/tests/*.test.js",
     "cli": "node dist/bin/cli.js"
   },
