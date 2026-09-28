@@ -63,7 +63,9 @@ npm test          # pretest で dist/ を削除・再ビルドしてから node 
 - テストはビルド後の `dist/` に対して実行されますが、`npm test` の `pretest` で毎回 `clean` → `build` されるため、古いビルド成果物でテストが走ることはありません。
 - ESM（`"type": "module"`、`module: NodeNext`）のため、相対 import には **`.js` 拡張子が必須** です（例: `from './types.js'`）。
 - `strict: true` です。
-- npm パッケージに含まれるのは `dist/src` と `dist/bin` のみです（`package.json` の `files`）。
+- npm パッケージに含まれるのは `dist/src` と `dist/bin`、および npm が自動で含める `README.md` / `LICENSE` / `package.json` です（`package.json` の `files`）。
+- `packages/typescript/LICENSE` と `packages/python/LICENSE` はパッケージ同梱用のルート `LICENSE` のコピーです。ルートを変更したら両方に反映してください。
+- 入力の型（`InputRequest` など）の配列は `readonly` です（ライブラリは入力を変更しない）。`optimize()` の戻り値の型は `OptimizationResultFor<T>` で入力の `dimension` から決まります。
 
 ### Python（`packages/python`）
 
@@ -75,6 +77,7 @@ python -m wood_cutting_optimizer ../../test-cases/2d_guillotine.json   # CLI 動
 
 - Python 3.9 以上をサポート。3.10+ 専用構文（`match`、`X | Y` 型表記の実行時評価など）は使わないでください。各モジュールは `from __future__ import annotations` を使用しています。
 - テストフレームワークは標準の `unittest` のみ（pytest 前提のコードは書かない）。
+- 型ヒント付きパッケージとして `py.typed` を同梱しています（`pyproject.toml` の `package-data`）。
 
 ### 言語間パリティ検証（リポジトリルート）
 

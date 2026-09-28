@@ -23,9 +23,17 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Typing :: Typed",
     "Topic :: Scientific/Engineering :: Mathematics",
 ]
 dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/Nagatani/wood-cutting-optimizer"
+Repository = "https://github.com/Nagatani/wood-cutting-optimizer"
+Issues = "https://github.com/Nagatani/wood-cutting-optimizer/issues"
+Changelog = "https://github.com/Nagatani/wood-cutting-optimizer/blob/main/CHANGELOG.md"
 
 [project.scripts]
 wood-cutting-optimizer = "wood_cutting_optimizer.cli:main"
@@ -34,3 +42,6 @@ wood-opt = "wood_cutting_optimizer.cli:main"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["wood_cutting_optimizer*"]
+
+[tool.setuptools.package-data]
+wood_cutting_optimizer = ["py.typed"]

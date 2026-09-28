@@ -12,6 +12,7 @@
 - **購入リスト**: 出力 `summary.stock_usage`（原材ごとの使用数と費用）
 - **SVG カット図面**: `renderSvg` / `render_svg`、CLI の `--svg` オプション
 - **汎用 1D ビンパッキング**: 新規ビンの選び方 `binSelection` / `bin_selection`（`smallest` / `largest` / `lowest-cost-ratio`）
+- **型**: TS の `optimize()` の戻り値の型を入力の `dimension` から推論（`OptimizationResult1D` / `OptimizationResult2D`）。入力の配列は `readonly` でも可。Python は `py.typed` を同梱
 - **入力検証**: `specification/schema.json` に基づき、不正な入力を `Invalid input: ...` のエラーにする（TS: `Error`、Python: `ValueError`）
 - CI（GitHub Actions）、TS と Python の出力一致検証（`scripts/check_parity.py`）、schema 準拠の検証（`scripts/validate_schema.py`）
 
@@ -35,6 +36,7 @@
 
 ### パッケージ
 - npm パッケージからテストコード（`dist/tests`）を除外
+- npm / Python パッケージに README と LICENSE を同梱し、リポジトリ URL などのメタデータを追加
 
 ## 0.1.0
 

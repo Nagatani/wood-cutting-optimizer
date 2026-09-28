@@ -4,6 +4,23 @@
   "description": "Zero-dependency 1D and 2D wood cutting optimization core library",
   "author": "wood-cutting-optimizer contributors",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Nagatani/wood-cutting-optimizer.git",
+    "directory": "packages/typescript"
+  },
+  "homepage": "https://github.com/Nagatani/wood-cutting-optimizer#readme",
+  "bugs": {
+    "url": "https://github.com/Nagatani/wood-cutting-optimizer/issues"
+  },
+  "keywords": [
+    "woodworking",
+    "cutting-stock",
+    "bin-packing",
+    "guillotine-cut",
+    "optimizer",
+    "svg"
+  ],
   "type": "module",
   "main": "./dist/src/index.js",
   "types": "./dist/src/index.d.ts",
