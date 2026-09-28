@@ -29,6 +29,20 @@ class TestInvariants(unittest.TestCase):
                 self.assertAlmostEqual(total, s.total_stock_measure, delta=1e-3)
 
 
+class TestExpectedResults(unittest.TestCase):
+    def test_expected_stock_count_and_placement(self):
+        for case_file in sorted(TEST_CASES_DIR.glob("*.json")):
+            with open(case_file, "r", encoding="utf-8") as f:
+                case_data = json.load(f)
+            expected = case_data.get("expected", {})
+            with self.subTest(case=case_file.name):
+                result = optimize(case_data["input"])
+                if "max_stocks_used" in expected:
+                    self.assertLessEqual(result.summary.stock_count_used, expected["max_stocks_used"])
+                if "all_placed" in expected:
+                    self.assertEqual(len(result.unplaced_parts) == 0, expected["all_placed"])
+
+
 class TestStockUsage(unittest.TestCase):
     def test_usage_adds_up_across_shared_cases(self):
         for case_file in sorted(TEST_CASES_DIR.glob("*.json")):

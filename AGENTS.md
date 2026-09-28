@@ -131,6 +131,7 @@ CI（`.github/workflows/ci.yml`）では Node 20/22、Python 3.9/3.13 のテス�
   - 空き矩形の選択: `best-short-side`（BSSF）/ `best-long-side`（BLSF）/ `best-area`（BAF）。使用中の全シートから選ぶ
   - ギロチン分割: `shorter-leftover-axis`（SLAS）/ `longer-leftover-axis` / `min-area` / `max-area`
   - 新規シートの選択: `smallest`（面積最小）/ `largest` / `lowest-cost-ratio`（面積あたりコスト最小）
+- 部材が200個以下なら、さらに **原材を1枚ずつ埋める方式**（`runSheetBySheet` / `_run_sheet_by_sheet`）も候補にする。残りの部材について、原材の種類 × ソート順 × 空き矩形の選択 × 分割方向の全組み合わせで1枚分を貪欲に埋め、「部材面積 / コスト」が最大の1枚を確定する、を繰り返す。
 - 配置後はギロチン分割し、kerf を差し引いた空き矩形を生成。`cuts` には `step` 番号付きで切断線を記録。
 - 木目判定 `isOrientationAllowed` / `is_orientation_allowed`:
   - `can_rotate: false` なら回転不可。

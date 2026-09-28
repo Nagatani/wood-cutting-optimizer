@@ -60,6 +60,12 @@ for (const sort of SORT_RULES) {
  * HUGE_INPUT_PIECES only the baseline sort and fit rules (12 heuristics).
  */
 const LARGE_INPUT_PIECES = 500;
+
+/**
+ * The sheet-by-sheet strategy (runSheetBySheet) tries every sort/fit/split combination for
+ * every stock type on every sheet, so it is only used up to this many part pieces.
+ */
+const SHEET_BY_SHEET_MAX_PIECES = 200;
 const HUGE_INPUT_PIECES = 2000;
 
 function heuristicCount(pieces: number): number {
@@ -215,7 +221,74 @@ export function optimize2D(input: InputRequest): OptimizationResult {
     }
   }
 
+  if (expandedParts.length <= SHEET_BY_SHEET_MAX_PIECES) {
+    const sheetBySheet = runSheetBySheet(input.stocks as Stock2D[], expandedParts, kerf);
+    const candidate = buildResult(
+      input.stocks as Stock2D[],
+      sheetBySheet.activeStocks,
+      sheetBySheet.unplacedPartsMap,
+      expandedParts.length,
+      minRemnantWidth,
+      minRemnantHeight
+    );
+    if (best === null || isBetterEvaluation(candidate.evaluation, best.evaluation)) {
+      best = candidate;
+    }
+  }
+
   return best!.result;
+}
+
+/**
+ * Sorts parts descending by the rule's keys (stable, so ties keep input order).
+ */
+function sortParts(parts: ExpandedPart2D[], rule: SortRule2D): ExpandedPart2D[] {
+  return parts.slice().sort((a, b) => {
+    const [a1, a2] = sortKeys(a, rule);
+    const [b1, b2] = sortKeys(b, rule);
+    if (b1 !== a1) {
+      return b1 - a1;
+    }
+    return b2 - a2;
+  });
+}
+
+function createStockPool(stocks: Stock2D[]): StockPoolItem[] {
+  return stocks.map((s) => ({
+    id: s.id,
+    width: s.width,
+    height: s.height,
+    trim: s.trim ?? 0,
+    grain: s.grain ?? 'none',
+    cost: s.cost ?? s.width * s.height,
+    remainingQuantity: resolveStockQuantity(s.quantity),
+  }));
+}
+
+/**
+ * Creates an empty sheet of the given stock type (the caller updates the pool quantity).
+ */
+function openStock(pool: StockPoolItem, poolIndex: number, index: number): ActiveStock2D {
+  const usableWidth = pool.width - pool.trim * 2;
+  const usableHeight = pool.height - pool.trim * 2;
+  return {
+    stockId: pool.id,
+    stockIndex: poolIndex,
+    index,
+    width: pool.width,
+    height: pool.height,
+    trim: pool.trim,
+    grain: pool.grain,
+    cost: pool.cost,
+    // The usable area inside the trimmed edges
+    freeRects: [{ x: pool.trim, y: pool.trim, width: usableWidth, height: usableHeight }],
+    placements: [],
+    cuts: [],
+    cutStepCount: 0,
+    cutLossArea: 0,
+    maxFreeWidth: usableWidth,
+    maxFreeHeight: usableHeight,
+  };
 }
 
 /**
@@ -227,26 +300,8 @@ function runHeuristic(
   kerf: number,
   heuristic: Heuristic2D
 ): { activeStocks: ActiveStock2D[]; unplacedPartsMap: Map<string, number> } {
-  // Sort parts descending by the heuristic's keys (stable, so ties keep input order)
-  const sortedParts = parts.slice().sort((a, b) => {
-    const [a1, a2] = sortKeys(a, heuristic.sort);
-    const [b1, b2] = sortKeys(b, heuristic.sort);
-    if (b1 !== a1) {
-      return b1 - a1;
-    }
-    return b2 - a2;
-  });
-
-  // Stock inventory pool
-  const stockPool: StockPoolItem[] = stocks.map((s) => ({
-    id: s.id,
-    width: s.width,
-    height: s.height,
-    trim: s.trim ?? 0,
-    grain: s.grain ?? 'none',
-    cost: s.cost ?? s.width * s.height,
-    remainingQuantity: resolveStockQuantity(s.quantity),
-  }));
+  const sortedParts = sortParts(parts, heuristic.sort);
+  const stockPool = createStockPool(stocks);
 
   const activeStocks: ActiveStock2D[] = [];
   const unplacedPartsMap = new Map<string, number>();
@@ -286,32 +341,7 @@ function runHeuristic(
 
     const chosen = stockPool[chosenPoolIdx];
     chosen.remainingQuantity -= 1;
-
-    const newStock: ActiveStock2D = {
-      stockId: chosen.id,
-      stockIndex: chosenPoolIdx,
-      index: globalStockIndex++,
-      width: chosen.width,
-      height: chosen.height,
-      trim: chosen.trim,
-      grain: chosen.grain,
-      cost: chosen.cost,
-      // The usable area inside the trimmed edges
-      freeRects: [
-        {
-          x: chosen.trim,
-          y: chosen.trim,
-          width: chosen.width - chosen.trim * 2,
-          height: chosen.height - chosen.trim * 2,
-        },
-      ],
-      placements: [],
-      cuts: [],
-      cutStepCount: 0,
-      cutLossArea: 0,
-      maxFreeWidth: chosen.width - chosen.trim * 2,
-      maxFreeHeight: chosen.height - chosen.trim * 2,
-    };
+    const newStock = openStock(chosen, chosenPoolIdx, globalStockIndex++);
 
     const fit = findBestFit(newStock, part, heuristic.fit);
     if (fit !== null) {
@@ -347,6 +377,78 @@ function updateMaxFreeSize(stock: ActiveStock2D): void {
   }
   stock.maxFreeWidth = maxWidth;
   stock.maxFreeHeight = maxHeight;
+}
+
+/**
+ * Packs one sheet at a time: for every stock type and every sort/fit/split combination,
+ * fill a single empty sheet greedily with the remaining parts, then keep the sheet that
+ * uses the most part area per cost. Repeats until every part is placed or nothing fits.
+ */
+function runSheetBySheet(
+  stocks: Stock2D[],
+  parts: ExpandedPart2D[],
+  kerf: number
+): { activeStocks: ActiveStock2D[]; unplacedPartsMap: Map<string, number> } {
+  const stockPool = createStockPool(stocks);
+  const activeStocks: ActiveStock2D[] = [];
+  let remaining = parts;
+
+  while (remaining.length > 0) {
+    let best: { sheet: ActiveStock2D; placed: Set<ExpandedPart2D>; usedArea: number } | null = null;
+
+    for (let pIdx = 0; pIdx < stockPool.length; pIdx++) {
+      const pool = stockPool[pIdx];
+      if (pool.remainingQuantity <= 0) continue;
+
+      for (const sort of SORT_RULES) {
+        const sortedParts = sortParts(remaining, sort);
+        for (const fitRule of FIT_RULES) {
+          for (const split of SPLIT_RULES) {
+            const sheet = openStock(pool, pIdx, activeStocks.length);
+            const placed = new Set<ExpandedPart2D>();
+            let usedArea = 0;
+            for (const part of sortedParts) {
+              if (!mayFit(sheet, part)) continue;
+              const fit = findBestFit(sheet, part, fitRule);
+              if (fit === null) continue;
+              placePartInStock(sheet, part, fit, kerf, split);
+              placed.add(part);
+              usedArea += part.area;
+            }
+            if (placed.size === 0) continue;
+            if (best === null || isBetterSheet(usedArea, sheet.cost, best.usedArea, best.sheet.cost)) {
+              best = { sheet, placed, usedArea };
+            }
+          }
+        }
+      }
+    }
+
+    if (best === null) break; // No remaining part fits in any remaining stock
+    stockPool[best.sheet.stockIndex].remainingQuantity -= 1;
+    activeStocks.push(best.sheet);
+    const placed = best.placed;
+    remaining = remaining.filter((part) => !placed.has(part));
+  }
+
+  const unplacedPartsMap = new Map<string, number>();
+  for (const part of remaining) {
+    unplacedPartsMap.set(part.partId, (unplacedPartsMap.get(part.partId) ?? 0) + 1);
+  }
+  return { activeStocks, unplacedPartsMap };
+}
+
+/**
+ * Compares sheets by part area per cost (cross-multiplied so a zero cost works),
+ * then by part area. Returns true when sheet a is strictly better.
+ */
+function isBetterSheet(areaA: number, costA: number, areaB: number, costB: number): boolean {
+  const valueA = areaA * costB;
+  const valueB = areaB * costA;
+  const tolerance = EPS * Math.max(1, Math.abs(valueA), Math.abs(valueB));
+  if (valueA > valueB + tolerance) return true;
+  if (valueA < valueB - tolerance) return false;
+  return areaA > areaB + EPS * Math.max(1, areaA, areaB);
 }
 
 /**

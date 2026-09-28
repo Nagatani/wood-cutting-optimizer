@@ -1,0 +1,67 @@
+{
+  "name": "2D Sheet-by-Sheet Packing",
+  "description": "Packing one sheet at a time reaches the area lower bound (2 sheets); a single greedy pass needs 3",
+  "input": {
+    "dimension": "2D",
+    "kerf": 3.0,
+    "min_remnant_size": {
+      "width": 150,
+      "height": 150
+    },
+    "stocks": [
+      {
+        "id": "saburoku",
+        "width": 910,
+        "height": 1820,
+        "quantity": 50,
+        "grain": "none"
+      }
+    ],
+    "parts": [
+      {
+        "id": "p0",
+        "width": 300,
+        "height": 300,
+        "quantity": 1,
+        "can_rotate": false,
+        "grain": "none"
+      },
+      {
+        "id": "p1",
+        "width": 250,
+        "height": 450,
+        "quantity": 6,
+        "can_rotate": true,
+        "grain": "none"
+      },
+      {
+        "id": "p2",
+        "width": 600,
+        "height": 750,
+        "quantity": 3,
+        "can_rotate": false,
+        "grain": "none"
+      },
+      {
+        "id": "p3",
+        "width": 200,
+        "height": 900,
+        "quantity": 2,
+        "can_rotate": false,
+        "grain": "none"
+      },
+      {
+        "id": "p4",
+        "width": 150,
+        "height": 400,
+        "quantity": 5,
+        "can_rotate": false,
+        "grain": "length"
+      }
+    ]
+  },
+  "expected": {
+    "all_placed": true,
+    "max_stocks_used": 2
+  }
+}

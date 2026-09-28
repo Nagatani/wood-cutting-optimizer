@@ -28,6 +28,26 @@ describe('Invariants across all shared test cases', () => {
   }
 });
 
+describe('Expected results of shared test cases', () => {
+  for (const file of caseFiles) {
+    const caseData = JSON.parse(fs.readFileSync(path.join(testCasesDir, file), 'utf-8'));
+    const expected = caseData.expected ?? {};
+    if (expected.max_stocks_used === undefined && expected.all_placed === undefined) continue;
+    it(`meets expected stock count and placement (${file})`, () => {
+      const result = optimize(caseData.input);
+      if (expected.max_stocks_used !== undefined) {
+        assert.ok(
+          result.summary.stock_count_used <= expected.max_stocks_used,
+          `used ${result.summary.stock_count_used} > ${expected.max_stocks_used}`
+        );
+      }
+      if (expected.all_placed !== undefined) {
+        assert.strictEqual(result.unplaced_parts.length === 0, expected.all_placed);
+      }
+    });
+  }
+});
+
 describe('Stock usage (purchase list)', () => {
   for (const file of caseFiles) {
     it(`stock_usage quantities add up to stock_count_used (${file})`, () => {

@@ -44,6 +44,10 @@ HEURISTICS_2D: List[Tuple[str, str, str, str]] = [
 # above LARGE_INPUT_PIECES part pieces only the baseline sort order (36 heuristics), and above
 # HUGE_INPUT_PIECES only the baseline sort and fit rules (12 heuristics).
 LARGE_INPUT_PIECES = 500
+
+# The sheet-by-sheet strategy (_run_sheet_by_sheet) tries every sort/fit/split combination for
+# every stock type on every sheet, so it is only used up to this many part pieces.
+SHEET_BY_SHEET_MAX_PIECES = 200
 HUGE_INPUT_PIECES = 2000
 
 
@@ -372,6 +376,113 @@ def _choose_stock(stock_pool: List[Dict[str, Any]], part: Dict[str, Any], rule: 
     return chosen_pool_idx
 
 
+def _sort_parts(parts: List[Dict[str, Any]], rule: str) -> List[Dict[str, Any]]:
+    """Sorts parts descending by the rule's keys (stable, so ties keep input order)."""
+    return sorted(parts, key=lambda p: _sort_keys(p, rule), reverse=True)
+
+
+def _create_stock_pool(stocks: List[Stock2D]) -> List[Dict[str, Any]]:
+    return [
+        {
+            "id": s.id,
+            "width": float(s.width),
+            "height": float(s.height),
+            "trim": float(s.trim) if s.trim is not None else 0.0,
+            "grain": s.grain or "none",
+            "cost": float(s.cost) if s.cost is not None else float(s.width) * float(s.height),
+            "remaining_quantity": resolve_stock_quantity(s.quantity),
+        }
+        for s in stocks
+    ]
+
+
+def _open_stock(pool: Dict[str, Any], pool_index: int, index: int) -> ActiveStock2D:
+    """Creates an empty sheet of the given stock type (the caller updates the pool quantity)."""
+    return ActiveStock2D(
+        stock_id=pool["id"],
+        stock_index=pool_index,
+        index=index,
+        width=pool["width"],
+        height=pool["height"],
+        trim=pool["trim"],
+        grain=pool["grain"],
+        cost=pool["cost"],
+    )
+
+
+def _is_better_sheet(area_a: float, cost_a: float, area_b: float, cost_b: float) -> bool:
+    """
+    Compares sheets by part area per cost (cross-multiplied so a zero cost works),
+    then by part area. Returns True when sheet a is strictly better.
+    """
+    value_a = area_a * cost_b
+    value_b = area_b * cost_a
+    tolerance = EPS * max(1.0, abs(value_a), abs(value_b))
+    if value_a > value_b + tolerance:
+        return True
+    if value_a < value_b - tolerance:
+        return False
+    return area_a > area_b + EPS * max(1.0, area_a, area_b)
+
+
+def _run_sheet_by_sheet(
+    stocks: List[Stock2D],
+    parts: List[Dict[str, Any]],
+    kerf: float,
+) -> Tuple[List[ActiveStock2D], Dict[str, int]]:
+    """
+    Packs one sheet at a time: for every stock type and every sort/fit/split combination,
+    fill a single empty sheet greedily with the remaining parts, then keep the sheet that
+    uses the most part area per cost. Repeats until every part is placed or nothing fits.
+    """
+    stock_pool = _create_stock_pool(stocks)
+    active_stocks: List[ActiveStock2D] = []
+    remaining = parts
+
+    while remaining:
+        best: Optional[Tuple[ActiveStock2D, set, float]] = None
+
+        for p_idx, pool in enumerate(stock_pool):
+            if pool["remaining_quantity"] <= 0:
+                continue
+            for sort_rule in SORT_RULES:
+                sorted_parts = _sort_parts(remaining, sort_rule)
+                for fit_rule in FIT_RULES:
+                    for split_rule in SPLIT_RULES:
+                        sheet = _open_stock(pool, p_idx, len(active_stocks))
+                        placed = set()  # ids of placed part dicts
+                        used_area = 0.0
+                        for part in sorted_parts:
+                            pw = part["width"]
+                            ph = part["height"]
+                            w = sheet.max_free_width + EPS
+                            h = sheet.max_free_height + EPS
+                            if not ((pw <= w and ph <= h) or (ph <= w and pw <= h)):
+                                continue
+                            fit = find_best_fit(sheet, part, fit_rule)
+                            if fit is None:
+                                continue
+                            place_part_in_stock(sheet, part, fit, kerf, split_rule)
+                            placed.add(id(part))
+                            used_area += part["area"]
+                        if not placed:
+                            continue
+                        if best is None or _is_better_sheet(used_area, sheet.cost, best[2], best[0].cost):
+                            best = (sheet, placed, used_area)
+
+        if best is None:
+            break  # No remaining part fits in any remaining stock
+        sheet, placed, _ = best
+        stock_pool[sheet.stock_index]["remaining_quantity"] -= 1
+        active_stocks.append(sheet)
+        remaining = [part for part in remaining if id(part) not in placed]
+
+    unplaced_parts_map: Dict[str, int] = {}
+    for part in remaining:
+        unplaced_parts_map[part["part_id"]] = unplaced_parts_map.get(part["part_id"], 0) + 1
+    return active_stocks, unplaced_parts_map
+
+
 def _run_heuristic(
     stocks: List[Stock2D],
     parts: List[Dict[str, Any]],
@@ -381,20 +492,8 @@ def _run_heuristic(
     """Runs one greedy packing pass with the given heuristic."""
     sort_rule, fit_rule, split_rule, stock_rule = heuristic
 
-    # Sort parts descending by the heuristic's keys (stable, so ties keep input order)
-    sorted_parts = sorted(parts, key=lambda p: _sort_keys(p, sort_rule), reverse=True)
-
-    stock_pool = []
-    for s in stocks:
-        stock_pool.append({
-            "id": s.id,
-            "width": float(s.width),
-            "height": float(s.height),
-            "trim": float(s.trim) if s.trim is not None else 0.0,
-            "grain": s.grain or "none",
-            "cost": float(s.cost) if s.cost is not None else float(s.width) * float(s.height),
-            "remaining_quantity": resolve_stock_quantity(s.quantity),
-        })
+    sorted_parts = _sort_parts(parts, sort_rule)
+    stock_pool = _create_stock_pool(stocks)
 
     active_stocks: List[ActiveStock2D] = []
     unplaced_parts_map: Dict[str, int] = {}
@@ -429,17 +528,7 @@ def _run_heuristic(
 
         chosen = stock_pool[chosen_pool_idx]
         chosen["remaining_quantity"] -= 1
-
-        new_stock = ActiveStock2D(
-            stock_id=chosen["id"],
-            stock_index=chosen_pool_idx,
-            index=global_stock_index,
-            width=chosen["width"],
-            height=chosen["height"],
-            trim=chosen["trim"],
-            grain=chosen["grain"],
-            cost=chosen["cost"],
-        )
+        new_stock = _open_stock(chosen, chosen_pool_idx, global_stock_index)
         global_stock_index += 1
 
         fit = find_best_fit(new_stock, part, fit_rule)
@@ -616,6 +705,19 @@ def optimize_2d(
     best: Optional[Tuple[OptimizationResult, SolutionEvaluation]] = None
     for heuristic in heuristics:
         active_stocks, unplaced_parts_map = _run_heuristic(stocks, expanded_parts, kerf, heuristic)
+        candidate = _build_result(
+            stocks,
+            active_stocks,
+            unplaced_parts_map,
+            len(expanded_parts),
+            min_remnant_width,
+            min_remnant_height,
+        )
+        if best is None or is_better_evaluation(candidate[1], best[1]):
+            best = candidate
+
+    if len(expanded_parts) <= SHEET_BY_SHEET_MAX_PIECES:
+        active_stocks, unplaced_parts_map = _run_sheet_by_sheet(stocks, expanded_parts, kerf)
         candidate = _build_result(
             stocks,
             active_stocks,
