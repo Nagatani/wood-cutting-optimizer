@@ -48,6 +48,17 @@ describe('optimize() result types', () => {
     }
   });
 
+  it('should accept readonly (as const) input', () => {
+    const input = {
+      dimension: '2D',
+      stocks: [{ id: 's', width: 100, height: 100, quantity: 'unlimited' }],
+      parts: [{ id: 'a', width: 50, height: 50 }],
+    } as const;
+    const result = optimize(input);
+    expectType<Equal<typeof result, OptimizationResult2D>>(true);
+    assert.strictEqual(result.stocks[0].width, 100);
+  });
+
   it('should keep the general type when the dimension is not known statically', () => {
     const input: InputRequest = {
       dimension: '1D',

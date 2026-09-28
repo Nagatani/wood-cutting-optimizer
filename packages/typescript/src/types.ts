@@ -55,22 +55,22 @@ export interface InputRequest {
   dimension: Dimension;
   kerf?: number;
   min_remnant_size?: MinRemnantSize;
-  stocks: (Stock1D | Stock2D)[];
-  parts: (Part1D | Part2D)[];
+  stocks: readonly (Stock1D | Stock2D)[];
+  parts: readonly (Part1D | Part2D)[];
 }
 
 /** A 1D request; `optimize()` returns an OptimizationResult1D for it. */
 export interface InputRequest1D extends InputRequest {
   dimension: '1D';
-  stocks: Stock1D[];
-  parts: Part1D[];
+  stocks: readonly Stock1D[];
+  parts: readonly Part1D[];
 }
 
 /** A 2D request; `optimize()` returns an OptimizationResult2D for it. */
 export interface InputRequest2D extends InputRequest {
   dimension: '2D';
-  stocks: Stock2D[];
-  parts: Part2D[];
+  stocks: readonly Stock2D[];
+  parts: readonly Part2D[];
 }
 
 export interface Cut1D {
