@@ -42,8 +42,10 @@ jobs:
           echo "$PWD/wasm-bindgen-$V-x86_64-unknown-linux-musl" >> "$GITHUB_PATH"
       - name: Build site
         run: scripts/build_site.sh _site
-      - name: Check the WebAssembly engine is included
-        run: test -f _site/lib/wasm/wood_cutting_optimizer_bg.wasm
+      - name: Check both engines are included
+        run: |
+          test -f _site/lib/ts/index.js
+          test -f _site/lib/wasm/wood_cutting_optimizer_bg.wasm
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site

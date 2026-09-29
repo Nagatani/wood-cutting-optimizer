@@ -21,6 +21,7 @@ WASM_BINDGEN="${WASM_BINDGEN:-wasm-bindgen}"
 
 rm -rf "$OUT"
 mkdir -p "$OUT/lib/ts" "$OUT/examples" "$OUT/images"
+OUT="$(cd "$OUT" && pwd)" # Absolute, since some steps below run in other directories
 cp -R "$ROOT/site/." "$OUT/"
 
 echo "Building the TypeScript engine..."
