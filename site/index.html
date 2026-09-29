@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Wood Cutting Optimizer</title>
+  <meta name="description" content="木材カット最適化ライブラリ（TypeScript / Python / Rust / WebAssembly）の使い方と、ブラウザで試せるプレイグラウンド">
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="inner">
+      <a class="brand" href="./"><img src="assets/icon.svg" alt="" width="26" height="26">Wood Cutting Optimizer</a>
+      <nav class="site-nav" aria-label="サイト内">
+        <a href="./" aria-current="page">使い方</a>
+        <a href="playground.html">プレイグラウンド</a>
+        <a href="https://github.com/Nagatani/wood-cutting-optimizer">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container narrow">
+    <section class="hero">
+      <h1>木材カットを、無駄なく・安く。</h1>
+      <p class="lead">
+        Wood Cutting Optimizer は、角材（1D）と合板（2D）から必要な部材を切り出すカットプランを計算するライブラリです。
+        鋸刃の厚み・ギロチンカット・木目・端材を考慮し、購入費用が最小になる原材の組み合わせを選びます。
+        TypeScript / Python / Rust（WebAssembly）の3実装が、同じ入力に対して同じ結果を返します。
+      </p>
+      <div class="actions">
+        <a class="button primary" href="playground.html">ブラウザで試す →</a>
+        <a class="button" href="https://github.com/Nagatani/wood-cutting-optimizer">GitHub リポジトリ</a>
+      </div>
+    </section>
+
+    <h2 id="features">特徴</h2>
+    <div class="feature-grid">
+      <div class="card"><h3>鋸刃の厚み（kerf）</h3><p>カットごとに刃の厚みぶんの材料が失われることを考慮し、部材が寸法不足になりません。</p></div>
+      <div class="card"><h3>ギロチンカット</h3><p>パネルソーや丸ノコで実際に切れる「端から端まで」のカットだけで構成し、切断順も出力します。</p></div>
+      <div class="card"><h3>木目の向き</h3><p>部材ごとに回転の可否・木目方向を指定でき、原板の木目と揃うように配置します。</p></div>
+      <div class="card"><h3>端材の判定</h3><p>指定サイズ以上の余りは「再利用できる端材」、それ未満は廃材として区別します。</p></div>
+      <div class="card"><h3>費用の最小化</h3><p>サイズ・価格の異なる原材が混在していても、総費用が最小になる組み合わせを選びます。</p></div>
+      <div class="card"><h3>購入計画</h3><p>原材の数量を「無制限」にすると、必要な枚数・本数と費用を購入リストとして出力します。</p></div>
+      <div class="card"><h3>端の切り落とし</h3><p>傷んだ工場出荷時の端や、割れた木口を先に落としてから配置できます。</p></div>
+      <div class="card"><h3>SVG カット図面</h3><p>計算結果を、そのまま印刷して使えるカット図面（SVG）として出力します。</p></div>
+      <div class="card"><h3>依存ゼロ・4実装</h3><p>外部ライブラリに依存せず、TypeScript・Python・Rust・WebAssembly で同一の結果を返します。</p></div>
+    </div>
+
+    <h3>出力されるカット図面の例</h3>
+    <div class="figure-row">
+      <div class="figure"><img src="images/example-2d.svg" alt="合板からの切り出し図面の例：側板・天板・棚板の配置、端材、カット線"></div>
+      <div class="figure"><img src="images/example-1d.svg" alt="角材からの切り出し図面の例：脚・貫・支えの配置と端材"></div>
+    </div>
+    <p class="muted small">茶色が部材、緑の破線が再利用できる端材、灰色が廃材・刃厚ぶん、赤線がカット線です。</p>
+
+    <h2 id="quickstart">使い方</h2>
+    <p>
+      入力は JSON（または同じ構造のオブジェクト）で、どの言語でも共通です。
+      下の例は、長さ 1820mm の角材（数量無制限）から、800mm の脚を4本切り出すための計算です。
+    </p>
+
+    <h3>TypeScript / JavaScript</h3>
+<pre><code>import { optimize, renderSvg } from 'wood-cutting-optimizer';
+
+const input = {
+  dimension: '1D',
+  kerf: 3,                                   // 鋸刃の厚み (mm)
+  stocks: [{ id: '2x4-6ft', length: 1820, quantity: 'unlimited', cost: 400 }],
+  parts: [{ id: 'leg', name: '脚', length: 800, quantity: 4 }],
+} as const;
+
+const result = optimize(input);
+console.log(result.summary.stock_count_used);  // 2（本）
+console.log(result.summary.stock_usage);       // [{ stock_id: '2x4-6ft', quantity: 2, cost: 800 }]
+const svg = renderSvg(result, input);          // SVG カット図面</code></pre>
+
+    <h3>Python</h3>
+<pre><code>from wood_cutting_optimizer import optimize, render_svg
+
+data = {
+    "dimension": "1D",
+    "kerf": 3,
+    "stocks": [{"id": "2x4-6ft", "length": 1820, "quantity": "unlimited", "cost": 400}],
+    "parts": [{"id": "leg", "name": "脚", "length": 800, "quantity": 4}],
+}
+
+result = optimize(data)
+print(result.summary.stock_count_used)   # 2
+svg = render_svg(result, data)</code></pre>
+
+    <h3>Rust</h3>
+<pre><code>use wood_cutting_optimizer::{json, optimize, render_svg};
+
+let input = json::parse(&amp;std::fs::read_to_string("input.json")?)?;
+let result = optimize(&amp;input)?;            // Err("Invalid input: ...") for invalid input
+println!("{}", result.to_value().to_pretty_string());
+let svg = render_svg(&amp;result, Some(&amp;input));</code></pre>
+
+    <h3>WebAssembly（ブラウザ）</h3>
+<pre><code>import init, { optimize, renderSvg } from './pkg/wood_cutting_optimizer.js';
+
+await init();
+const result = optimize(input);            // 入力が不正なら例外
+document.querySelector('#plan').innerHTML = renderSvg(result, input);</code></pre>
+    <p class="muted small">このサイトの<a href="playground.html">プレイグラウンド</a>は、WebAssembly 版と TypeScript 版をブラウザ上で直接動かしています（サーバーへの送信はありません）。</p>
+
+    <h3>コマンドライン</h3>
+<pre><code># TypeScript 版
+node packages/typescript/dist/bin/cli.js -i input.json -o result.json --svg cut-plan.svg
+# Python 版
+python -m wood_cutting_optimizer -i input.json -o result.json --svg cut-plan.svg
+# Rust 版
+packages/rust/target/release/wood-cutting-optimizer -i input.json -o result.json --svg cut-plan.svg</code></pre>
+
+    <h3>セットアップ</h3>
+    <p>現在はリポジトリからビルドして利用します。</p>
+<pre><code>git clone https://github.com/Nagatani/wood-cutting-optimizer.git
+cd wood-cutting-optimizer
+
+(cd packages/typescript &amp;&amp; npm install &amp;&amp; npm run build)   # TypeScript
+(cd packages/python &amp;&amp; pip install -e .)                   # Python 3.9+
+(cd packages/rust &amp;&amp; cargo build --release)                # Rust</code></pre>
+
+    <h2 id="input">入力項目</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>項目</th><th>説明</th></tr></thead>
+        <tbody>
+          <tr><td><code>dimension</code></td><td><code>"1D"</code>（角材などの棒材）または <code>"2D"</code>（合板などの板材）</td></tr>
+          <tr><td><code>kerf</code></td><td>鋸刃の厚み（mm）。省略時 0</td></tr>
+          <tr><td><code>min_remnant_size</code></td><td>再利用できる端材とみなす最小サイズ。1D は <code>{ length }</code>、2D は <code>{ width, height }</code></td></tr>
+          <tr><td><code>stocks[]</code></td><td>原材。<code>id</code>、寸法（1D: <code>length</code> / 2D: <code>width</code>・<code>height</code>）、<code>quantity</code>（整数または <code>"unlimited"</code>）、<code>cost</code>（単価）、<code>trim</code>（端の切り落とし幅）、2D は <code>grain</code>（木目: <code>none</code> / <code>length</code> / <code>width</code>）</td></tr>
+          <tr><td><code>parts[]</code></td><td>部材。<code>id</code>、<code>name</code>、寸法、<code>quantity</code>、2D は <code>can_rotate</code>（回転可否、既定 true）と <code>grain</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="muted small">
+      <code>id</code> は一覧内で重複できません。仕様に反する入力は <code>Invalid input: ...</code> のエラーになります。
+      完全な仕様は <a href="https://github.com/Nagatani/wood-cutting-optimizer/blob/main/specification/schema.json">specification/schema.json</a> を参照してください。
+    </p>
+
+    <h2 id="output">出力の要点</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>項目</th><th>説明</th></tr></thead>
+        <tbody>
+          <tr><td><code>summary.yield_rate</code></td><td>歩留まり（使用原材に占める部材の割合、0〜1）</td></tr>
+          <tr><td><code>summary.stock_count_used</code></td><td>使用した原材の数</td></tr>
+          <tr><td><code>summary.stock_usage</code></td><td>購入リスト。原材ごとの <code>quantity</code> と <code>cost</code>（単価 × 数量）</td></tr>
+          <tr><td><code>summary.total_*_measure</code></td><td>原材・部材・廃材・端材の合計面積（1D は長さ）。部材 + 廃材 + 端材 = 原材</td></tr>
+          <tr><td><code>stocks[].placements</code></td><td>各部材の位置（<code>x</code>, <code>y</code>）・寸法・回転の有無</td></tr>
+          <tr><td><code>stocks[].cuts</code></td><td>カット線（位置・長さ・刃厚）と切断順 <code>step</code></td></tr>
+          <tr><td><code>stocks[].remnants</code> / <code>waste</code></td><td>再利用できる端材 / 廃材の領域</td></tr>
+          <tr><td><code>unplaced_parts</code></td><td>原材が足りないなどで配置できなかった部材</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2 id="algorithm">計算方法</h2>
+    <p>
+      複数の並べ方・配置先の選び方・カット方向・原材の選び方を組み合わせて貪欲法を実行し、
+      「未配置が少ない → 総費用が安い → 使用数が少ない → 端材が多い → カット数が少ない」の順で最良の結果を採用します。
+      2D で部材が200個以下の場合は、原材を1枚ずつ最適に埋めていく方法も試します。
+      詳しくは <a href="https://github.com/Nagatani/wood-cutting-optimizer#readme">README</a> を参照してください。
+    </p>
+  </main>
+
+  <footer class="site-footer">
+    MIT License · <a href="https://github.com/Nagatani/wood-cutting-optimizer">github.com/Nagatani/wood-cutting-optimizer</a>
+  </footer>
+</body>
+</html>

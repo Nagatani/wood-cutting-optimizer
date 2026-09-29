@@ -25,3 +25,4 @@ Thumbs.db
 # Rust
 packages/rust/target/
 packages/rust/pkg*/
+_site/

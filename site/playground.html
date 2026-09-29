@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cutting Playground</title>
+  <meta name="description" content="原材と部材を入力して、木材のカットプランと SVG 図面をブラウザ上で計算するプレイグラウンド">
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="inner">
+      <a class="brand" href="./"><img src="assets/icon.svg" alt="" width="26" height="26">Wood Cutting Optimizer</a>
+      <nav class="site-nav" aria-label="サイト内">
+        <a href="./">使い方</a>
+        <a href="playground.html" aria-current="page">プレイグラウンド</a>
+        <a href="https://github.com/Nagatani/wood-cutting-optimizer">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <p class="muted small" style="margin-top:0">
+      原材と部材を入力して「計算する」を押すと、カットプランを計算します。計算はすべてブラウザ内で行われ、入力内容はどこにも送信されません。
+    </p>
+
+    <div class="playground">
+      <!-- ========== Input ========== -->
+      <section class="card" aria-labelledby="input-title">
+        <div class="panel-title">
+          <h2 id="input-title" style="margin:0;border:0;padding:0;font-size:17px">入力</h2>
+          <label class="field" style="flex-direction:row;align-items:center;gap:6px">
+            <span>サンプル</span>
+            <select id="preset"></select>
+          </label>
+        </div>
+
+        <div class="tabs" role="tablist">
+          <button type="button" role="tab" id="tab-form" aria-selected="true" aria-controls="pane-form">フォーム</button>
+          <button type="button" role="tab" id="tab-json" aria-selected="false" aria-controls="pane-json">JSON</button>
+        </div>
+
+        <div id="pane-form" role="tabpanel" aria-labelledby="tab-form">
+          <div class="field-row">
+            <div class="field">
+              <span>材料の種類</span>
+              <div class="segmented" role="radiogroup" aria-label="材料の種類">
+                <label><input type="radio" name="dimension" value="2D" checked>2D 板材</label>
+                <label><input type="radio" name="dimension" value="1D">1D 棒材</label>
+              </div>
+            </div>
+            <label class="field">鋸刃の厚み (mm)<input type="number" id="kerf" min="0" step="0.1"></label>
+          </div>
+          <div class="field-row">
+            <span style="flex-basis:100%;font-size:13px;margin-bottom:-6px">再利用できる端材の最小サイズ (mm)</span>
+            <label class="field dim-1d">長さ<input type="number" id="min-length" min="0"></label>
+            <label class="field dim-2d">幅<input type="number" id="min-width" min="0"></label>
+            <label class="field dim-2d">高さ<input type="number" id="min-height" min="0"></label>
+          </div>
+
+          <div class="section-label">
+            <span>原材（購入する板・角材）</span>
+            <button type="button" class="icon" id="add-stock">＋ 行を追加</button>
+          </div>
+          <div class="table-wrap"><table class="edit-table" id="stocks-table"></table></div>
+
+          <div class="section-label">
+            <span>部材（切り出したい部品）</span>
+            <button type="button" class="icon" id="add-part">＋ 行を追加</button>
+          </div>
+          <div class="table-wrap"><table class="edit-table" id="parts-table"></table></div>
+          <p class="muted small" style="margin:8px 0 0">
+            数量を空欄にすると 1、原材の「無制限」にチェックすると必要なだけ使います（購入計画）。単価を入れると総費用が最小になる組み合わせを選びます。
+          </p>
+        </div>
+
+        <div id="pane-json" role="tabpanel" aria-labelledby="tab-json" hidden>
+          <textarea class="code" id="json-input" spellcheck="false" aria-label="入力 JSON"></textarea>
+          <div class="actions" style="margin-top:8px">
+            <button type="button" id="apply-json">フォームに反映</button>
+            <span class="muted small">specification/schema.json の形式。<code>{"input": ...}</code> 形式も読み込めます。</span>
+          </div>
+        </div>
+
+        <div class="run-bar">
+          <label class="field" style="flex-direction:row;align-items:center;gap:6px">
+            <span>計算エンジン</span>
+            <select id="engine">
+              <option value="wasm">WebAssembly（Rust）</option>
+              <option value="ts">TypeScript</option>
+            </select>
+          </label>
+          <button type="button" class="primary" id="run">計算する</button>
+        </div>
+      </section>
+
+      <!-- ========== Result ========== -->
+      <section class="card" aria-labelledby="result-title" aria-live="polite">
+        <div class="panel-title">
+          <h2 id="result-title" style="margin:0;border:0;padding:0;font-size:17px">結果</h2>
+          <div class="actions">
+            <button type="button" class="icon" id="download-svg" disabled>SVG を保存</button>
+            <button type="button" class="icon" id="download-json" disabled>JSON を保存</button>
+          </div>
+        </div>
+        <div id="error" class="error" hidden></div>
+        <div id="result-body"><p class="empty">「計算する」を押すと、ここに結果が表示されます。</p></div>
+      </section>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    MIT License · <a href="https://github.com/Nagatani/wood-cutting-optimizer">github.com/Nagatani/wood-cutting-optimizer</a>
+  </footer>
+
+  <script type="module" src="assets/playground.js"></script>
+</body>
+</html>
