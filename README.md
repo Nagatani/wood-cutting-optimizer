@@ -8,6 +8,8 @@
 
 1次元の棒材（角材・ツーバイフォー材等）および2次元の板材（合板・サブロク板等）の歩留まり最適化を行い、鋸刃の厚み（Kerf）、ギロチンカット制約、木目方向（Grain）、再利用可能端材（Remnants）の識別に対応しています。
 
+**📖 使い方ガイドとプレイグラウンド: https://nagatani.github.io/wood-cutting-optimizer/** — ブラウザ上で原材・部材を入力して、カットプランと図面をその場で計算できます（WebAssembly / TypeScript で動作し、入力はどこにも送信されません）。
+
 TypeScript・Python・Rust（WebAssembly 対応）の3実装を、同等の最適化アルゴリズム・同一の JSON 入出力仕様で提供しています。同じ入力に対して、どの実装も同一の結果（JSON・SVG）を返します。
 
 ---
@@ -38,8 +40,10 @@ wood-cutting-optimizer/
 │   └── ci.yml              # CI（TS / Python テスト、言語間パリティ検証）
 ├── docs/
 │   └── example-*.svg       # README 掲載のカット図面サンプル
+├── site/                   # GitHub Pages（使い方ガイド・プレイグラウンド）のソース
 ├── scripts/
-│   └── check_parity.py     # TS と Python の出力（JSON・SVG）一致検証
+│   ├── check_parity.py     # 4実装の出力（JSON・SVG）一致検証
+│   └── build_site.sh       # GitHub Pages サイトのビルド（site/ + TS / WASM エンジン → _site/）
 ├── specification/
 │   └── schema.json         # 入出力標準 JSON Schema
 ├── test-cases/             # 言語共通の検証シナリオ（1D / 2D、木目、コスト、数量無制限、trim など）

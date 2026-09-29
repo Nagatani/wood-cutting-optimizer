@@ -21,6 +21,9 @@ scripts/check_parity.py        # TS（基準）と Python・Rust・WASM の出�
 scripts/validate_schema.py     # test-cases/ の入力と TS / Python の出力が schema.json に準拠するか検証（要 jsonschema）
 CHANGELOG.md                   # 変更履歴（TS / Python / Rust 共通のバージョン）
 docs/example-*.svg             # README 掲載用のカット図面サンプル（test-cases から生成）
+site/                          # GitHub Pages のソース（index.html: 使い方ガイド / playground.html: プレイグラウンド）
+scripts/build_site.sh          # site/ + TS ビルド + WASM ビルド + test-cases を _site/ に組み立て
+.github/workflows/pages.yml    # main への push で _site/ をビルドして GitHub Pages にデプロイ
 specification/schema.json      # 入出力の JSON Schema（言語共通の正）
 test-cases/*.json              # 言語共通の検証シナリオ（{ name, description, input, expected }）
 packages/typescript/
@@ -190,6 +193,13 @@ CI（`.github/workflows/ci.yml`）では Node 20/22、Python 3.9/3.13、Rust sta
 - TS と Python で **バイト単位で同一の SVG** を出力する（`check_parity.py` で比較）。そのため数値整形（`fmt` / `_fmt`: 小数2桁の四捨五入・末尾ゼロ除去）と文字幅の見積もり（ASCII 0.6em、それ以外 1em）は自前実装。`toFixed` や Python の `round` / `:.2f` は丸め方が異なるので使わないでください。
 - 座標は mm 単位の `viewBox`。フォントサイズは最大寸法 / 45、ラベルが収まらなければ寸法のみ → 非表示の順に縮退する。
 - レンダラーを変更したら `docs/example-*.svg` を再生成してください（`node packages/typescript/dist/bin/cli.js test-cases/2d_guillotine.json --svg docs/example-2d.svg`、1D は `1d_basic.json` → `docs/example-1d.svg`）。
+
+### GitHub Pages（`site/`）
+- 公開 URL: https://nagatani.github.io/wood-cutting-optimizer/ 。`main` への push ごとに `.github/workflows/pages.yml` がビルド・デプロイします。
+- プレイグラウンドはブラウザ内で WASM 版（`lib/wasm/`）と TS 版（`lib/ts/`）を直接読み込んで計算します。外部ライブラリ・CDN は使いません（依存ゼロの方針）。
+- プリセットは `test-cases/*.json` をそのまま使います（`site/assets/playground.js` の `PRESETS` に表示名を登録）。テストケースを追加したら必要に応じて登録してください。
+- ローカル確認: `scripts/build_site.sh && python3 -m http.server -d _site 8000`（`wasm-bindgen` がなければ TS エンジンのみで動作）。
+- 公開 API や入出力仕様を変えたら、`site/index.html` の使い方・入出力の説明も更新してください。
 
 ## 既知の差異・注意点
 
