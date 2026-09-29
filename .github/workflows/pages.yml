@@ -1,0 +1,59 @@
+name: Pages
+
+# Builds the usage guide and playground (site/ + TypeScript and WebAssembly engines)
+# and deploys it to GitHub Pages.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: packages/typescript/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/rust
+      - name: Install TypeScript dependencies
+        working-directory: packages/typescript
+        run: npm ci
+      - name: Install wasm-bindgen CLI (same version as Cargo.lock)
+        run: |
+          V=$(grep -A1 'name = "wasm-bindgen"$' packages/rust/Cargo.lock | grep version | cut -d'"' -f2)
+          curl -sSfL "https://github.com/wasm-bindgen/wasm-bindgen/releases/download/$V/wasm-bindgen-$V-x86_64-unknown-linux-musl.tar.gz" | tar xz
+          echo "$PWD/wasm-bindgen-$V-x86_64-unknown-linux-musl" >> "$GITHUB_PATH"
+      - name: Build site
+        run: scripts/build_site.sh _site
+      - name: Check the WebAssembly engine is included
+        run: test -f _site/lib/wasm/wood_cutting_optimizer_bg.wasm
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
