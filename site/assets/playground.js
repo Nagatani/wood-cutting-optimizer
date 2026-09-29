@@ -437,12 +437,71 @@ function run() {
     return;
   }
   lastResult = result;
-  renderResult(result, lastSvg, elapsed, engineLabel);
+  renderResult(result, lastSvg, elapsed, engineLabel, input);
   $('download-svg').disabled = false;
   $('download-json').disabled = false;
+  $('print').disabled = false;
 }
 
-function renderResult(result, svg, elapsed, engineLabel) {
+/** Formats a millimetre value for instructions (up to 1 decimal). */
+function mm(n) {
+  return formatNumber(Math.round(n * 10) / 10, Number.isInteger(Math.round(n * 10) / 10) ? 0 : 1);
+}
+
+/**
+ * Builds the printable cut procedure: for each used stock, the parts cut from it and
+ * the cuts in order (the `step` of each cut), with positions from the top-left corner.
+ */
+function renderCutProcedure(result, input) {
+  const request = input && typeof input === 'object' && 'input' in input ? input.input : input;
+  const names = new Map((request?.parts ?? []).map((p) => [p.id, p.name || p.id]));
+  const trims = new Map((request?.stocks ?? []).map((s) => [s.id, Number(s.trim) || 0]));
+  const kerf = Number(request?.kerf) || 0;
+  const is2D = result.dimension === '2D';
+
+  const blocks = result.stocks.map((stock) => {
+    const size = is2D ? `${mm(stock.width)}×${mm(stock.height)} mm` : `${mm(stock.length)} mm`;
+    const counts = new Map();
+    for (const p of stock.placements) {
+      const dims = is2D ? `${mm(p.width)}×${mm(p.height)}` : mm(p.length);
+      const key = `${names.get(p.part_id) ?? p.part_id} ${dims}`;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    const partsText = [...counts].map(([key, n]) => `${key} ×${n}`).join('、');
+
+    const steps = [];
+    const trim = trims.get(stock.stock_id) ?? 0;
+    if (trim > 0) {
+      steps.push(is2D ? `四辺を ${mm(trim)} mm ずつ切り落とす` : `両端を ${mm(trim)} mm ずつ切り落とす`);
+    }
+    for (const c of [...stock.cuts].sort((a, b) => a.step - b.step)) {
+      if (!is2D) {
+        steps.push(`左端から ${mm(c.x)} mm の位置で切る`);
+      } else if (c.type === 'horizontal') {
+        steps.push(`横に切る：上端から ${mm(c.y)} mm（左から ${mm(c.x)}〜${mm(c.x + c.length)} mm の範囲）`);
+      } else {
+        steps.push(`縦に切る：左端から ${mm(c.x)} mm（上から ${mm(c.y)}〜${mm(c.y + c.length)} mm の範囲）`);
+      }
+    }
+
+    return el('div', { class: 'procedure' }, [
+      el('h3', {}, `#${stock.index + 1} ${stock.stock_id}（${size}）`),
+      el('p', { class: 'small' }, `切り出す部材：${partsText}`),
+      steps.length > 0 ? el('ol', {}, steps.map((s) => el('li', {}, s))) : el('p', { class: 'small muted' }, '切断は不要です'),
+    ]);
+  });
+
+  return el('div', {}, [
+    el(
+      'p',
+      { class: 'small muted' },
+      `位置は原材の左上（1D は左端）からの距離です。刃の厚み（${mm(kerf)} mm）は線の右側・下側に入ります。番号の順に切ると、各カットは板の端から端まで通ります（ギロチンカット）。`
+    ),
+    ...blocks,
+  ]);
+}
+
+function renderResult(result, svg, elapsed, engineLabel, input) {
   const s = result.summary;
   const is2D = result.dimension === '2D';
   const unplaced = result.unplaced_parts.reduce((n, u) => n + u.quantity, 0);
@@ -503,7 +562,9 @@ function renderResult(result, svg, elapsed, engineLabel) {
       el('span', { class: 'l-cut' }, 'カット線（ホバーで切断順）'),
     ]),
     diagram,
-    el('details', {}, [el('summary', {}, '結果 JSON'), el('pre', {}, JSON.stringify(result, null, 2))])
+    el('div', { class: 'section-label' }, el('span', {}, 'カット手順')),
+    renderCutProcedure(result, input),
+    el('details', { class: 'no-print' }, [el('summary', {}, '結果 JSON'), el('pre', {}, JSON.stringify(result, null, 2))])
   );
 
   $('result-body').replaceChildren(...children);
@@ -558,6 +619,7 @@ function bindTopLevelInputs() {
   $('run').addEventListener('click', run);
 
   $('download-svg').addEventListener('click', () => lastSvg && download('cut-plan.svg', lastSvg, 'image/svg+xml'));
+  $('print').addEventListener('click', () => window.print());
   $('download-json').addEventListener('click', () =>
     lastResult && download('result.json', JSON.stringify(lastResult, null, 2), 'application/json')
   );

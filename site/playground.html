@@ -21,13 +21,13 @@
   </header>
 
   <main class="container">
-    <p class="muted small" style="margin-top:0">
+    <p class="muted small no-print" style="margin-top:0">
       原材と部材を入力して「計算する」を押すと、カットプランを計算します。計算はすべてブラウザ内で行われ、入力内容はどこにも送信されません。
     </p>
 
     <div class="playground">
       <!-- ========== Input ========== -->
-      <section class="card" aria-labelledby="input-title">
+      <section class="card input-panel" aria-labelledby="input-title">
         <div class="panel-title">
           <h2 id="input-title" style="margin:0;border:0;padding:0;font-size:17px">入力</h2>
           <label class="field" style="flex-direction:row;align-items:center;gap:6px">
@@ -102,6 +102,7 @@
           <div class="actions">
             <button type="button" class="icon" id="download-svg" disabled>SVG を保存</button>
             <button type="button" class="icon" id="download-json" disabled>JSON を保存</button>
+            <button type="button" class="icon" id="print" disabled>印刷</button>
           </div>
         </div>
         <div id="error" class="error" hidden></div>

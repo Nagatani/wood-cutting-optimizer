@@ -673,3 +673,82 @@ details summary {
 .panel-title h2 {
   white-space: nowrap;
 }
+
+/* ---------- Cut procedure ---------- */
+
+.procedure {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin: 8px 0;
+  break-inside: avoid;
+}
+
+.procedure h3 {
+  margin: 0 0 4px;
+  font-size: 15px;
+}
+
+.procedure p {
+  margin: 0 0 6px;
+}
+
+.procedure ol {
+  margin: 0;
+  padding-left: 1.6em;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Print: only the result (summary, purchase list, diagram, cut procedure) ---------- */
+
+@media print {
+  :root {
+    --bg: #fff;
+    --surface: #fff;
+    --surface-2: #f3f3f3;
+    --text: #000;
+    --muted: #444;
+    --border: #bbb;
+  }
+
+  body {
+    background: #fff;
+    font-size: 12px;
+  }
+
+  .site-header,
+  .site-footer,
+  .input-panel,
+  .no-print,
+  .panel-title .actions,
+  #error {
+    display: none !important;
+  }
+
+  .container {
+    padding: 0;
+    max-width: none;
+  }
+
+  .playground {
+    display: block;
+  }
+
+  .card {
+    border: none;
+    box-shadow: none;
+    padding: 0;
+  }
+
+  .diagram {
+    max-height: none;
+    overflow: visible;
+    border: none;
+    padding: 0;
+  }
+
+  .diagram svg {
+    max-height: none;
+  }
+}
